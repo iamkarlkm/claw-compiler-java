@@ -1,5 +1,6 @@
 package com.claw.compiler;
 
+import com.claw.compiler.pipeline.CompilationResult;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import static org.junit.jupiter.api.Assertions.*;
@@ -91,6 +92,7 @@ class ResourceManagementTest {
         String tempFile = "resource_test.claw";
 
         try {
+             ClawCompiler compiler = new ClawCompiler();
             CompilationResult result = compiler.compileFile(invalidPath);
             assertFalse(result.isSuccess(), "应该返回失败结果");
             assertTrue(result.hasErrors(), "应该有错误信息");
