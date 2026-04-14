@@ -1,0 +1,153 @@
+// ========== 测试 Java 代码生成改进 ==========
+
+// 1. 测试类型推断
+@@description("计算两数之和", "Int,Int -> Int")
+@@param("a", "第一个数")
+@@param("b", "第二个数")
+@@return("两数之和")
+function add(a: Int, b: Int) -> Int {
+    return a + b
+}
+
+// 2. 测试复杂类型
+@@description("创建用户信息")
+function createUser(name: String, age: Int) -> User {
+    var user = User()
+    user.name = name
+    user.age = age
+    return user
+}
+
+// 3. 测试异常处理
+@@description("处理可能的异常")
+function safeDivide(a: Int, b: Int) -> Float {
+    if (b == 0) {
+        throw new ArithmeticError("除数不能为零")
+    }
+    return a / b
+}
+
+// 4. 测试函数调用和返回值
+@@description("计算平方")
+function square(x: Int) -> Int {
+    return x * x
+}
+
+// 5. 测试循环和控制流
+@@description("统计素数")
+function countPrimes(n: Int) -> Int {
+    var count = 0
+    var num = 2
+
+    while (num <= n) {
+        var isPrime = true
+
+        var i = 2
+        while (i * i <= num) {
+            if (num % i == 0) {
+                isPrime = false
+                break
+            }
+            i = i + 1
+        }
+
+        if (isPrime) {
+            count = count + 1
+        }
+
+        num = num + 1
+    }
+
+    return count
+}
+
+// 6. 测试注解钩子
+@BeforeName("initConfig", "this")
+@AfterName("cleanupConfig", "this")
+type Config {
+    var maxRetries: Int
+    var timeout: Float
+    var verbose: Bool
+}
+
+// 7. 测试数组类型
+@@description("处理字符串数组")
+function processNames(names: Array<String>) -> Int {
+    var count = 0
+
+    var i = 0
+    while (i < names.length) {
+        if (names[i].length > 5) {
+            count = count + 1
+        }
+        i = i + 1
+    }
+
+    return count
+}
+
+// 8. 测试 Map 类型
+@@description("计算词频")
+function wordCount(words: Map<String, Int>) -> Int {
+    var total = 0
+
+    var key in words {
+        total = total + words[key]
+    }
+
+    return total
+}
+
+// 9. 测试 Set 类型
+@@description("检查唯一性")
+function hasDuplicates(nums: Set<Int>) -> Bool {
+    return nums.size > 0
+}
+
+// 10. 测试 Optional 类型
+@@description("获取配置项")
+function getConfigValue(key: String) -> Optional<String> {
+    var config = {"timeout": "30s", "retries": "3"}
+    var value = config[key]
+
+    if (value != null) {
+        return Optional.of(value)
+    } else {
+        return Optional.empty()
+    }
+}
+
+// 主函数
+function main() -> Void {
+    var sum = add(10, 20)
+    println("Sum: " + sum)
+
+    var user = createUser("Alice", 25)
+    println("User: " + user.name + ", Age: " + user.age)
+
+    var result = safeDivide(100, 4)
+    println("Division result: " + result)
+
+    var squared = square(5)
+    println("Square of 5: " + squared)
+
+    var primeCount = countPrimes(100)
+    println("Primes up to 100: " + primeCount)
+
+    var config = Config()
+    config.maxRetries = 3
+    config.timeout = 30.0
+    config.verbose = true
+
+    var names = ["Alice", "Bob", "Charlie", "David"]
+    println("Names with length > 5: " + processNames(names))
+
+    var wordCounts = {"hello": 3, "world": 2, "test": 1}
+    println("Total word count: " + wordCount(wordCounts))
+
+    var uniqueNums = {1, 2, 3, 4, 5}
+    println("Has duplicates: " + hasDuplicates(uniqueNums))
+
+    var configValue = getConfigValue("timeout")
+    println("Config value: " + configValue)
+}

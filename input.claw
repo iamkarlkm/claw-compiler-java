@@ -1,0 +1,44 @@
+// 标准库导入
+import { println, fileOpen, fileClose, fileWriteString } from std.io
+import { length, compare, safeCopy } from std.string
+import { alloc, free } from std.mem
+import { sqrt, pow, PI } from std.math
+import { now } from std.time
+
+@@description("计算两点之间的距离", "(x1,y1,x2,y2) -> Double")
+@@param("x1", "第一个点的x坐标")
+@@param("y1", "第一个点的y坐标")
+
+public function distance(x1: Double, y1: Double, x2: Double, y2: Double) -> Double {
+    var dx = x2 - x1
+    var dy = y2 - y1
+    return sqrt(pow(dx, 2.0) + pow(dy, 2.0))
+}
+
+public function main() -> Int {
+    // 数学计算
+    var dist = distance(0.0, 0.0, 3.0, 4.0)
+    println("距离: %f", dist)
+    println("PI = %f", PI)
+    
+    // 字符串操作
+    var greeting = alloc(256)
+    safeCopy(greeting, "Hello, Claw!", 256)
+    var len = length(greeting)
+    println("字符串长度: %zu", len)
+    
+    // 文件操作
+    var file = fileOpen("output.txt", "w")
+    fileWriteString("Hello from Claw!
+", file)
+    fileClose(file)
+    
+    // 时间
+    var timestamp = now()
+    println("时间戳: %ld", timestamp)
+    
+    // 清理
+    free(greeting)
+    
+    return 0
+}

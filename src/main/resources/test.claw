@@ -1,0 +1,27 @@
+import std.io
+
+type UserInfo {
+    name: String
+    age: Int
+}
+
+@BeforeName("initUser", "this")
+@AfterName("cleanupUser", "this")
+@BeforeProps("user.age")
+@AfterProps("user.age")
+
+normal function greet(user: UserInfo) -> String {
+    return "Hello " + user.name + ", age: " + user.age
+
+    catch (ValidationError e) {
+        return "Error: " + e.message
+    }
+}
+
+function initUser(context: Any) -> Void {
+    print("UserInfo created")
+}
+
+function cleanupUser(context: Any) -> Void {
+    print("UserInfo destroyed")
+}

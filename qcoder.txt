@@ -1,0 +1,7 @@
+qcoder
+
+pt-2nDJ8KSmKpTy3CBeFrTfIzrI_019d2eca-66d1-7c82-b964-087df12edced
+
+
+cd tauri-app && npm install
+cd flutter-app && flutter pub get

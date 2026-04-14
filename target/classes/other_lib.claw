@@ -1,0 +1,83 @@
+extern "C" {
+    link "sqlite3" @version(">=3.35.0")
+    include "sqlite3.h"
+
+    // 不透明指针类型
+    type sqlite3 = OpaquePointer
+    type sqlite3_stmt = OpaquePointer
+
+    // 结构体（非不透明，可直接操作字段）
+    struct sqlite3_mem_methods {
+        xMalloc:  FuncPointer
+        xFree:    FuncPointer
+        xRealloc: FuncPointer
+        xSize:    FuncPointer
+    }
+
+    // 枚举
+    enum SqliteResult {
+        SQLITE_OK     = 0
+        SQLITE_ERROR  = 1
+        SQLITE_BUSY   = 5
+        SQLITE_ROW    = 100
+        SQLITE_DONE   = 101
+    }
+
+    // 回调类型
+    callback ExecCallback(
+        userData: Pointer,
+        numCols: Int,
+        colValues: CArray<CString>,
+        colNames: CArray<CString>
+    ) -> Int
+
+    // 函数 + 扩展属性
+    function sqlite3_open(filename: CString, db: Ref<sqlite3>) -> Int
+        @canFail("returns non-zero on error")
+        @threadSafety("THREAD_SAFE")
+
+    function sqlite3_exec(
+        db: sqlite3,
+        sql: CString,
+        callback: ExecCallback,   // 使用上面声明的回调类型
+        userData: Pointer,
+        errmsg: Ref<CString>
+    ) -> Int
+        @returnOwnership("CALLER_OWNS")  // errmsg 需要 sqlite3_free
+
+    function sqlite3_close(db: sqlite3) -> Int
+
+    // 宏
+    macro SQLITE_VERSION_NUMBER: Int = 3039004
+}
+
+// 仅 Windows 平台
+extern "C" @platform("windows") {
+    link "kernel32"
+    
+    function GetLastError() -> UInt32
+    function SetLastError(dwErrCode: UInt32) -> Void
+}
+
+// 仅 Linux/macOS 平台
+extern "C" @platform("linux", "macos") {
+    link "pthread"
+
+    type pthread_t = UInt64
+    type pthread_mutex_t = OpaquePointer
+
+    callback ThreadFunc(arg: Pointer) -> Pointer
+
+    function pthread_create(
+        thread: Ref<pthread_t>,
+        attr: Pointer,
+        start_routine: ThreadFunc,
+        arg: Pointer
+    ) -> Int
+
+    function pthread_mutex_lock(mutex: pthread_mutex_t) -> Int
+        @threadSafety("THREAD_SAFE")
+
+    function pthread_mutex_unlock(mutex: pthread_mutex_t) -> Int
+        @threadSafety("THREAD_SAFE")
+}

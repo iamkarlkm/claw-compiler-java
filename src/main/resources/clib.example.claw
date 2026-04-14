@@ -1,0 +1,60 @@
+/**
+Claw 语言使用 C 第三方库的完整方案
+这是一个非常关键的问题。Claw 需要一套 FFI（Foreign Function Interface）机制 来调用 C 第三方库。下面给出完整设计。
+
+核心思路
+Claw 源码  →  extern 声明（描述 C 函数签名）
+           →  编译器生成对应目标代码的绑定层
+           →  链接时与 C 库对接
+
+*/
+
+// 声明外部 C 函数（不写函数体，只写签名）
+extern "C" function sqlite3_open(filename: String, db: Pointer) -> Int
+extern "C" function sqlite3_close(db: Pointer) -> Int
+extern "C" function sqlite3_exec(
+    db: Pointer,
+    sql: String,
+    callback: Pointer,
+    arg: Pointer,
+    errmsg: Pointer
+) -> Int
+
+// 声明外部 C 常量
+extern "C" const SQLITE_OK: Int = 0
+extern "C" const SQLITE_ERROR: Int = 1
+
+extern "C" {
+    // 链接指令：告诉编译器需要链接哪个库
+    link "sqlite3"          // -> -lsqlite3
+    link "curl"             // -> -lcurl
+    include "sqlite3.h"     // 对应的 C 头文件（文档用途 + C 目标直接引用）
+
+    // 类型映射
+    type sqlite3 = OpaquePointer    // 不透明指针
+    type sqlite3_stmt = OpaquePointer
+
+    // 函数签名
+    function sqlite3_open(filename: String, db: Ref<sqlite3>) -> Int
+    function sqlite3_close(db: sqlite3) -> Int
+    function sqlite3_errmsg(db: sqlite3) -> String
+
+    function sqlite3_prepare_v2(
+        db: sqlite3,
+        sql: String,
+        nByte: Int,
+        stmt: Ref<sqlite3_stmt>,
+        tail: Pointer
+    ) -> Int
+
+    function sqlite3_step(stmt: sqlite3_stmt) -> Int
+    function sqlite3_finalize(stmt: sqlite3_stmt) -> Int
+    function sqlite3_column_text(stmt: sqlite3_stmt, col: Int) -> String
+    function sqlite3_column_int(stmt: sqlite3_stmt, col: Int) -> Int
+
+    // 常量
+    const SQLITE_OK: Int = 0
+    const SQLITE_ROW: Int = 100
+    const SQLITE_DONE: Int = 101
+}
+

@@ -1,0 +1,83 @@
+package claw.compiler.generators.ffi.platform;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import claw.compiler.generators.ffi.FFIBindingTable.ExternBlock;
+
+/**
+ * 平台索引 — 在 FFIBindingTable 中为每个平台预建索引
+ *
+ * 解决场景：编译器需要为多个目标平台分别生成代码（交叉编译）
+ * 每次 filterForPlatform 都要遍历所有块 → 用索引避免
+ */
+public class PlatformIndex {
+
+    /**
+     * 约束掩码 → 匹配该约束的 ExternBlock 列表
+     *
+     * 约束掩码为 0 的块（全平台）存在 universalBlocks 中
+     */
+    private final List<ExternBlock> universalBlocks = new ArrayList<>();
+
+    /**
+     * 按平台位单独索引
+     * key = 单个平台的位标志
+     * value = 声明了该平台约束的块列表
+     */
+    private final Map<Long, List<ExternBlock>> platformBuckets = new HashMap<>();
+
+    /**
+     * 构建索引（在所有 extern 块解析完成后调用一次）
+     */
+    public void buildIndex(List<ExternBlock> blocks) {
+        universalBlocks.clear();
+        platformBuckets.clear();
+
+        for (ExternBlock block : blocks) {
+            if (block.platform == null || block.platform.isUniversal()) {
+                universalBlocks.add(block);
+            } else {
+                long mask = block.platform.getRawMask();
+                long platformBits = mask & PlatformConstraint.PLATFORM_MASK;
+
+                // 将块添加到它支持的每个平台的桶中
+                for (int bit = 0; bit < 16; bit++) {
+                    long singleBit = 1L << bit;
+                    if ((platformBits & singleBit) != 0) {
+                        platformBuckets
+                            .computeIfAbsent(singleBit, k -> new ArrayList<>())
+                            .add(block);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * 快速获取某目标平台的候选块
+     *
+     * 只返回 全平台块 + 目标平台桶中的块
+     * 不需要遍历不相关平台的块
+     */
+    public List<ExternBlock> getCandidateBlocks(TargetTriple target) {
+        long targetBits = target.toBitmask();
+        long targetPlatformBit = targetBits & PlatformConstraint.PLATFORM_MASK;
+
+        List<ExternBlock> candidates = new ArrayList<>(universalBlocks);
+
+        List<ExternBlock> bucket = platformBuckets.get(targetPlatformBit);
+        if (bucket != null) {
+            // 还需要检查架构和工具链维度
+            for (ExternBlock block : bucket) {
+                if (block.platform.matchesBitmask(targetBits)) {
+                    candidates.add(block);
+                }
+            }
+        }
+
+        return candidates;
+    }
+}

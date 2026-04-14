@@ -1,0 +1,90 @@
+import std.io
+
+// ========== 外部 C 库声明 ==========
+extern "C" {
+    link "sqlite3"
+    include "sqlite3.h"
+
+    type sqlite3 = OpaquePointer
+    type sqlite3_stmt = OpaquePointer
+
+    function sqlite3_open(filename: CString, db: Ref<sqlite3>) -> Int
+    function sqlite3_close(db: sqlite3) -> Int
+    function sqlite3_errmsg(db: sqlite3) -> CString
+    function sqlite3_exec(
+        db: sqlite3, sql: CString,
+        callback: Pointer, arg: Pointer, errmsg: Pointer
+    ) -> Int
+    function sqlite3_prepare_v2(
+        db: sqlite3, sql: CString, nByte: Int,
+        stmt: Ref<sqlite3_stmt>, tail: Pointer
+    ) -> Int
+    function sqlite3_step(stmt: sqlite3_stmt) -> Int
+    function sqlite3_finalize(stmt: sqlite3_stmt) -> Int
+    function sqlite3_column_text(stmt: sqlite3_stmt, col: Int) -> CString
+    function sqlite3_column_int(stmt: sqlite3_stmt, col: Int) -> Int
+
+    const SQLITE_OK: Int = 0
+    const SQLITE_ROW: Int = 100
+    const SQLITE_DONE: Int = 101
+}
+
+// ========== Claw 封装层（可选，推荐） ==========
+type Database {
+    handle: sqlite3
+    isOpen: Bool
+}
+
+normal function openDatabase(path: String) -> Database {
+    var db = Database()
+    var result = sqlite3_open(path, ref db.handle)
+
+    if (result != SQLITE_OK) {
+        var msg = sqlite3_errmsg(db.handle)
+        throws IOError("Cannot open database: " + msg)
+    }
+
+    db.isOpen = true
+    return db
+
+    catch (IOError e) {
+        print("Database error: " + e.message)
+        throws e
+    }
+}
+
+normal function query(db: Database, sql: String) -> Void {
+    var stmt: sqlite3_stmt
+    var rc = sqlite3_prepare_v2(db.handle, sql, -1, ref stmt, null)
+
+    if (rc != SQLITE_OK) {
+        throws IOError("SQL prepare failed: " + sqlite3_errmsg(db.handle))
+    }
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        var name = sqlite3_column_text(stmt, 0)
+        var age = sqlite3_column_int(stmt, 1)
+        print(name + ": " + age)
+    }
+
+    sqlite3_finalize(stmt)
+
+    catch (IOError e) {
+        sqlite3_finalize(stmt)
+        print("Query error: " + e.message)
+    }
+}
+
+function closeDatabase(db: Database) -> Void {
+    if (db.isOpen) {
+        sqlite3_close(db.handle)
+        db.isOpen = false
+    }
+}
+
+// ========== 主程序 ==========
+function main() -> Void {
+    var db = openDatabase("users.db")
+    query(db, "SELECT name, age FROM users")
+    closeDatabase(db)
+}

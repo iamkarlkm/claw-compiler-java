@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find \"I:/2026/claw-compiler-java/src/main/java\" -name \"*.java\" -exec grep -L '/\\\\*\\\\*' {} \\\\;)",
+      "Bash(find \"I:/2026/claw-compiler-java/src/main/java\" -name \"*.java\" -exec grep -n \"public.*\\(\" {} +)",
+      "Skill(glm-plan-usage:usage-query-skill)",
+      "Bash(cd /d I:\\\\2026\\\\claw-compiler-java)",
+      "Bash(mvn test:*)",
+      "Bash(java -cp target/classes com.claw.compiler.ClawCompiler test_simple.claw)",
+      "Bash(mvn clean:*)",
+      "Bash(mvn compile:*)",
+      "Bash(mvn test-compile:*)",
+      "Bash(awk ':*)",
+      "Bash(python3)",
+      "Bash(head -634 src/main/java/claw/compiler/generators/ffi/FFIBindingTable.java)",
+      "Bash(mv src/main/java/claw/compiler/generators/ffi/FFIBindingTable_fixed.java src/main/java/claw/compiler/generators/ffi/FFIBindingTable.java)",
+      "Bash(head -n 804 src/main/java/claw/compiler/generators/ffi/FFIBindingTable.java)",
+      "Bash(sed -i 's/public static class VersionConstraint/static class VersionConstraint/g' src/main/java/claw/compiler/generators/ffi/FFIBindingTable.java)",
+      "Bash(sed -i 's/public final String libraryName/final String libraryName/g' src/main/java/claw/compiler/generators/ffi/FFIBindingTable.java)",
+      "Bash(sed -i 's/public final String operator/final String operator/g' src/main/java/claw/compiler/generators/ffi/FFIBindingTable.java)",
+      "Bash(sed -i 's/public final String versionString/final String versionString/g' src/main/java/claw/compiler/generators/ffi/FFIBindingTable.java)",
+      "Bash(sed -i 's/public VersionConstraint/VersionConstraint/g' src/main/java/claw/compiler/generators/ffi/FFIBindingTable.java)",
+      "Bash(ls -la src/main/java/claw/compiler/generators/ffi/*.java)",
+      "Bash(mv src/main/java/claw/compiler/generators/ffi/FFIBindingTable.java src/main/java/claw/compiler/generators/ffi/FFIBindingTable_broken.java)",
+      "Bash(cp src/main/java/claw/compiler/generators/ffi/FFIBindingTable2.java src/main/java/claw/compiler/generators/ffi/FFIBindingTable.java)",
+      "Bash(rm src/main/java/claw/compiler/generators/ffi/FFIBindingTable.java.disabled)",
+      "Bash(mv src/main/java/claw/compiler/generators/ffi/FFIBindingTable_broken.java src/main/java/claw/compiler/generators/ffi/FFIBindingTable.java.disabled)"
+    ]
+  }
+}

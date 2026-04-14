@@ -1,0 +1,11 @@
+// 简单测试
+
+@@description("计算两数之和", "Int,Int -> Int")
+function add(a: Int, b: Int) -> Int {
+    return a + b
+}
+
+function main() -> Void {
+    var result = add(10, 20)
+    println("Sum: " + result)
+}

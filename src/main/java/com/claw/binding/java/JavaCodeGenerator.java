@@ -1,0 +1,937 @@
+package com.claw.binding.java;
+
+import claw.compiler.binding.TargetCodeGenerator;
+import claw.compiler.binding.TargetRuntime;
+import claw.compiler.generators.IRGenerator.*;
+
+import java.util.*;
+import java.util.stream.Collectors;
+
+import com.claw.binding.GenerationConfig;
+import com.claw.binding.GenerationResult;
+import claw.compiler.generators.ClawIR;
+
+/**
+ * Java目标语言代码生成器
+ * 
+ * 通过 TargetRuntime 接口与 JavaRuntime 交互，
+ * 不直接硬编码任何 Java 语法，保持解耦。
+ */
+public class JavaCodeGenerator implements TargetCodeGenerator {
+
+    private final JavaRuntime runtime;
+    private final StringBuilder output;
+    private int indentLevel;
+
+    public JavaCodeGenerator() {
+        this.runtime = new JavaRuntime();
+        this.output = new StringBuilder();
+        this.indentLevel = 0;
+    }
+
+    /**
+     * 构造函数：允许注入自定义运行时（测试用）
+     */
+    public JavaCodeGenerator(JavaRuntime runtime) {
+        this.runtime = runtime;
+        this.output = new StringBuilder();
+        this.indentLevel = 0;
+    }
+
+    @Override
+    public TargetRuntime getRuntime() {
+        return runtime;
+    }
+
+    @Override
+    public String generate(ClawIR ir) {
+        output.setLength(0);
+        indentLevel = 0;
+
+        // 1. 生成文件头注释（从系统注解元数据）
+        Map<String, Object> metadata = ir.getIrProgram().getMetadata();
+        if (!metadata.isEmpty()) {
+            Map<String, String> metaStr = new LinkedHashMap<>();
+            metadata.forEach((k, v) -> metaStr.put(k, v.toString()));
+            appendLine(runtime.generateDocComment(metaStr));
+        }
+
+        // 2. 生成必要的 import
+        for (String imp : runtime.getRequiredImports()) {
+            appendLine(runtime.generateImport(imp, null));
+        }
+        appendLine("");
+
+        // 3. 遍历IR指令生成Java代码
+        for (IRBasicBlock block : ir.getIrProgram().getTopLevelBlocks()) {
+            generateBlock(block);
+        }
+
+        return output.toString();
+    }
+
+    @Override
+    public String getLanguageName() {
+        return runtime.getLanguageName();
+    }
+
+    @Override
+    public String getFileExtension() {
+        return runtime.getFileExtension();
+    }
+
+    // ==================== 内部生成逻辑 ====================
+
+    private void generateBlock(IRBasicBlock block) {
+        for (IRInstruction inst : block.getInstructions()) {
+            generateInstruction(inst);
+        }
+        for (IRBasicBlock child : block.getChildren()) {
+            generateBlock(child);
+        }
+    }
+
+    private void generateInstruction(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
+
+        switch (inst.getOpCode()) {
+            case FUNC_DEF: {
+                String funcName = ops.get(0).toString();
+                // 简化版：完整版会从语义上下文获取完整签名
+                appendLine(runtime.generateFunctionHeader(
+                    "public", "void", funcName,
+                    Collections.emptyList(), Collections.emptyList()
+                ));
+                indentLevel++;
+                break;
+            }
+
+            case SCOPE_ENTER:
+                // 作用域已由函数头的 { 打开
+                break;
+
+            case SCOPE_EXIT:
+                indentLevel--;
+                appendLine(runtime.generateFunctionFooter());
+                break;
+
+            case ALLOC: {
+                String varName = ops.get(0).toString();
+                String typeName = ops.size() > 1 ? ops.get(1).toString() : "Object";
+                appendLine(runtime.generateVariableDeclaration(
+                    false, typeName, varName, null
+                ));
+                break;
+            }
+
+            case STORE_VAR: {
+                String varName = ops.get(0).toString();
+                appendLine(varName + " = __stack_top" + runtime.getStatementTerminator());
+                break;
+            }
+
+            case LOAD_CONST: {
+                String value = ops.get(0).toString();
+                appendLine(runtime.generateComment("load const: " + value));
+                break;
+            }
+
+            case LOAD_VAR: {
+                String varName = ops.get(0).toString();
+                appendLine(runtime.generateComment("load var: " + varName));
+                break;
+            }
+
+            case FUNC_CALL: {
+                String funcName = ops.get(0).toString();
+                List<String> args = ops.subList(1, ops.size()).stream()
+                    .map(Object::toString)
+                    .collect(Collectors.toList());
+
+                // 处理返回值
+                if (ops.size() > 1) {
+                    String resultVar = ops.get(1).toString();
+                    appendLine(resultVar + " = " + runtime.generateFunctionCall(funcName, args) +
+                               runtime.getStatementTerminator());
+                } else {
+                    appendLine(runtime.generateFunctionCall(funcName, args) +
+                               runtime.getStatementTerminator());
+                }
+                break;
+            }
+
+            case RETURN: {
+                String expr = !ops.isEmpty() ? ops.get(0).toString() : null;
+                appendLine(runtime.generateReturn(expr));
+                break;
+            }
+
+            case BEFORE_PROPS_HOOK: {
+                String prop = ops.get(0).toString();
+                appendLine(runtime.generateBeforePropsHook(prop, "__newValue"));
+                break;
+            }
+
+            case AFTER_PROPS_HOOK: {
+                String prop = ops.get(0).toString();
+                appendLine(runtime.generateAfterPropsHook(prop, "__oldValue", "__newValue"));
+                break;
+            }
+
+            case BEFORE_NAME_HOOK: {
+                String method = ops.get(0).toString();
+                String target = ops.size() > 1 ? ops.get(1).toString() : "this";
+                appendLine(runtime.generateConstructorHook(method, target));
+                break;
+            }
+
+            case AFTER_NAME_HOOK: {
+                String method = ops.get(0).toString();
+                String target = ops.size() > 1 ? ops.get(1).toString() : "this";
+                appendLine(runtime.generateComment("Destructor hook registered: " + method));
+                break;
+            }
+
+            case PROP_SET: {
+                String prop = ops.get(0).toString();
+                appendLine(prop + " = __newValue" + runtime.getStatementTerminator());
+                break;
+            }
+
+            case NORMAL_FLOW_BEGIN:
+                appendLine(runtime.generateComment("=== Normal Flow Begin ==="));
+                break;
+
+            case NORMAL_FLOW_END:
+                appendLine(runtime.generateComment("=== Normal Flow End ==="));
+                break;
+
+            case EXCEPTION_CATCH: {
+                String exType = ops.get(0).toString();
+                String varName = ops.size() > 1 ? ops.get(1).toString() : "e";
+                String catchBody = ops.size() > 2 ? ops.get(2).toString() : "// handle exception";
+
+                // 生成 catch 块
+                appendLine("} catch (" + runtime.mapType(exType) + " " + varName + ") {");
+                indentLevel++;
+
+                // 生成 catch 体内的代码
+                for (int i = 3; i < ops.size(); i++) {
+                    appendLine(runtime.generateComment("catch: " + ops.get(i)));
+                }
+                appendLine(catchBody);
+
+                indentLevel--;
+                appendLine("}");
+                break;
+            }
+
+            case EXCEPTION_THROWS: {
+                String exType = ops.get(0).toString();
+                appendLine(runtime.generateThrowStatement(exType, "Exception thrown: " + exType));
+                break;
+            }
+
+            case FLOW_TO: {
+                String target = ops.get(0).toString();
+                appendLine(runtime.generateFlowTo(target));
+                break;
+            }
+
+            case JUMP_IF_TRUE: {
+                String label = ops.get(0).toString();
+                appendLine(runtime.generateIf("__condition"));
+                break;
+            }
+
+            case JUMP_IF_FALSE: {
+                String label = ops.get(0).toString();
+                appendLine(runtime.generateIf("!__condition"));
+                break;
+            }
+
+            case IMPORT: {
+                String module = ops.get(0).toString();
+                String symbol = ops.size() > 1 ? ops.get(1).toString() : null;
+                appendLine(runtime.generateImport(module, symbol));
+                break;
+            }
+
+            case EXPORT: {
+                String symbol = ops.get(0).toString();
+                appendLine(runtime.generateExport(symbol));
+                break;
+            }
+
+            case TYPE_DEF: {
+                String typeName = ops.get(0).toString();
+                appendLine(runtime.generateTypeDefinitionHeader(typeName, "public"));
+                indentLevel++;
+                break;
+            }
+
+            case METADATA: {
+                appendLine(runtime.generateComment("metadata: " +
+                    ops.stream().map(Object::toString).collect(Collectors.joining(", "))));
+                break;
+            }
+
+            case NOP:
+                if (!ops.isEmpty()) {
+                    appendLine(runtime.generateComment(ops.get(0).toString()));
+                }
+                break;
+
+            default:
+                appendLine(runtime.generateComment("TODO: " + inst.getOpCode().name()));
+                break;
+        }
+    }
+
+    // ==================== 辅助方法 ====================
+
+    private void appendLine(String line) {
+        String indent = "    ".repeat(Math.max(0, indentLevel));
+        output.append(indent).append(line).append("\n");
+    }
+
+    private void appendEmptyLine() {
+        output.append("\n");
+    }
+
+    /**
+     * 生成代码（使用 GenerationConfig）
+     *
+     * @param ir Claw 中间表示
+     * @param config 生成配置
+     * @return 生成结果
+     */
+    @Override
+    public GenerationResult generate(com.claw.ir.ClawIR ir, GenerationConfig config) {
+        GenerationResult result = new GenerationResult();
+
+        try {
+            output.setLength(0);
+            indentLevel = 0;
+
+            // 1. 生成文件头注释
+            String moduleComment = "// Generated by Claw Compiler v3.0\n" +
+                                   "// Source: " + ir.getModuleName() + ".claw\n" +
+                                   "// Target: Java\n";
+            appendLine(moduleComment.trim());
+            appendEmptyLine();
+
+            // 2. 生成 package 声明
+            String packageName = ir.getModuleName().toLowerCase().replace("/", ".");
+            appendLine("package " + packageName + ";");
+            appendEmptyLine();
+
+            // 3. 生成必要的 import
+            for (String imp : runtime.getRequiredImports()) {
+                appendLine(runtime.generateImport(imp, null));
+            }
+            appendEmptyLine();
+
+            // 4. 生成运行时辅助类（如果需要）
+            if (config == null || config.isGenerateComments()) {
+                String helpers = runtime.generateRuntimeHelpers();
+                for (String line : helpers.split("\n")) {
+                    appendLine(line);
+                }
+                appendEmptyLine();
+            }
+
+            // 5. 遍历 IR 节点生成代码
+            for (var node : ir.getNodes()) {
+                generateNode(node);
+            }
+
+            // 6. 设置输出结果
+            result.addFile(ir.getModuleName() + getFileExtension(), output.toString());
+
+        } catch (Exception e) {
+            result.addError("代码生成错误: " + e.getMessage());
+        }
+
+        return result;
+    }
+
+    /**
+     * 生成单个 IR 节点
+     */
+    private void generateNode(com.claw.ir.IRNode node) {
+        switch (node.getType()) {
+            case FUNCTION_DECLARATION:
+                generateFunctionNode(node);
+                break;
+            case TYPE_DEFINITION:
+                generateTypeNode(node);
+                break;
+            case VARIABLE_DECLARATION:
+                generateVariableNode(node);
+                break;
+            case IMPORT:
+                generateImportNode(node);
+                break;
+            default:
+                appendLine(runtime.generateComment("Node: " + node.getType()));
+                break;
+        }
+    }
+
+    /**
+     * 生成函数节点
+     */
+    private void generateFunctionNode(com.claw.ir.IRNode node) {
+        String funcName = node.getMeta("name", String.class);
+        if (funcName == null) funcName = "unnamed";
+
+        String visibility = node.getMeta("visibility", String.class);
+        if (visibility == null) visibility = "public";
+
+        String returnType = node.getMeta("returnType", String.class);
+        if (returnType == null) returnType = "void";
+
+        // 生成 JavaDoc（如果有描述）
+        String description = node.getMeta("description", String.class);
+        if (description != null) {
+            Map<String, String> meta = new LinkedHashMap<>();
+            meta.put("description", description);
+            appendLine(runtime.generateDocComment(meta));
+        }
+
+        // 处理参数
+        List<com.claw.ir.IRNode> parameters = new ArrayList<>();
+        List<com.claw.ir.IRNode> otherChildren = new ArrayList<>();
+        for (var child : node.getChildren()) {
+            if (child.getType() == com.claw.ir.IRNodeType.PARAMETER) {
+                parameters.add(child);
+            } else {
+                otherChildren.add(child);
+            }
+        }
+
+        // 生成参数声明
+        StringBuilder paramDecl = new StringBuilder();
+        for (int i = 0; i < parameters.size(); i++) {
+            var param = parameters.get(i);
+            String paramName = param.getMeta("name", String.class);
+            String paramType = param.getMeta("type", String.class);
+
+            if (paramName != null && paramType != null) {
+                if (i > 0) paramDecl.append(", ");
+                String javaType = runtime.mapType(paramType);
+                paramDecl.append(javaType).append(" ").append(paramName);
+            }
+        }
+
+        // 生成方法签名
+        appendLine(visibility + " " + runtime.mapType(returnType) + " " + funcName + "(" + paramDecl + ") {");
+        indentLevel++;
+
+        // 生成函数体（子节点）
+        for (var child : otherChildren) {
+            generateNode(child);
+        }
+
+        indentLevel--;
+        appendLine("}");
+        appendEmptyLine();
+    }
+
+    /**
+     * 生成类型定义节点
+     */
+    private void generateTypeNode(com.claw.ir.IRNode node) {
+        String typeName = node.getMeta("name", String.class);
+        if (typeName == null) typeName = "UnnamedType";
+
+        appendLine("public class " + typeName + " {");
+        indentLevel++;
+
+        // 生成字段
+        for (var child : node.getChildren()) {
+            if (child.getType() == com.claw.ir.IRNodeType.VARIABLE_DECLARATION) {
+                generateFieldNode(child);
+            }
+        }
+
+        // 生成构造函数
+        appendEmptyLine();
+        appendLine("public " + typeName + "() {");
+        indentLevel++;
+        // 注入 @BeforeName 钩子
+        String beforeHook = node.getMeta("beforeName", String.class);
+        if (beforeHook != null) {
+            appendLine(runtime.generateConstructorHook(beforeHook, "this"));
+        }
+        indentLevel--;
+        appendLine("}");
+
+        // 生成 close 方法（AutoCloseable）
+        String afterHook = node.getMeta("afterName", String.class);
+        if (afterHook != null) {
+            appendEmptyLine();
+            appendLine("@Override");
+            appendLine("public void close() {");
+            indentLevel++;
+            appendLine(runtime.generateComment("@AfterName hook"));
+            appendLine("this." + afterHook + "();");
+            indentLevel--;
+            appendLine("}");
+        }
+
+        indentLevel--;
+        appendLine("}");
+        appendEmptyLine();
+    }
+
+    /**
+     * 生成字段节点
+     */
+    private void generateFieldNode(com.claw.ir.IRNode node) {
+        String name = node.getMeta("name", String.class);
+        String type = node.getMeta("type", String.class);
+        String value = node.getMeta("value", String.class);
+        Boolean isConst = node.getMeta("isConst", Boolean.class);
+
+        if (name == null) return;
+
+        StringBuilder sb = new StringBuilder();
+        if (Boolean.TRUE.equals(isConst)) {
+            sb.append("private static final ");
+        } else {
+            sb.append("private ");
+        }
+        sb.append(runtime.mapType(type != null ? type : "Object"));
+        sb.append(" ").append(name);
+        if (value != null) {
+            sb.append(" = ").append(value);
+        }
+        sb.append(";");
+
+        appendLine(sb.toString());
+    }
+
+    /**
+     * 生成变量声明节点
+     */
+    private void generateVariableNode(com.claw.ir.IRNode node) {
+        String name = node.getMeta("name", String.class);
+        String type = node.getMeta("type", String.class);
+        String value = node.getMeta("value", String.class);
+        Boolean isConst = node.getMeta("isConst", Boolean.class);
+
+        if (name == null) return;
+
+        // 生成 JavaDoc（如果有描述）
+        String description = node.getMeta("description", String.class);
+        if (description != null) {
+            Map<String, String> meta = new LinkedHashMap<>();
+            meta.put("description", description);
+            appendLine(runtime.generateDocComment(meta));
+        }
+
+        // 处理复杂类型
+        String javaType = type != null ? type : "var";
+        if (!javaType.equals("var")) {
+            javaType = runtime.mapType(javaType);
+        }
+
+        appendLine(runtime.generateVariableDeclaration(
+            Boolean.TRUE.equals(isConst),
+            javaType,
+            name,
+            value
+        ));
+    }
+
+    /**
+     * 生成赋值节点
+     */
+    private void generateAssignmentNode(com.claw.ir.IRNode node) {
+        String target = node.getMeta("target", String.class);
+        String value = node.getMeta("value", String.class);
+
+        if (target == null || value == null) return;
+
+        // 生成 JavaDoc（如果有描述）
+        String description = node.getMeta("description", String.class);
+        if (description != null) {
+            Map<String, String> meta = new LinkedHashMap<>();
+            meta.put("description", description);
+            appendLine(runtime.generateDocComment(meta));
+        }
+
+        appendLine(target + " = " + value + ";");
+    }
+
+    /**
+     * 生成导入节点
+     */
+    private void generateImportNode(com.claw.ir.IRNode node) {
+        String path = node.getMeta("path", String.class);
+        String symbols = node.getMeta("symbols", String.class);
+
+        if (path != null) {
+            appendLine(runtime.generateImport(path, symbols));
+        }
+    }
+}
+
+
+
+// package com.claw.binding.java;
+
+// import java.util.List;
+
+// import com.claw.binding.GenerationConfig;
+// import com.claw.binding.GenerationResult;
+// import com.claw.binding.TargetCodeGenerator;
+// import com.claw.compiler.processors.semantic.FunctionProcessor.ParameterInfo;
+// import com.claw.ir.ClawIR;
+// import com.claw.ir.FlowModel;
+// import com.claw.ir.IRAnnotation;
+// import com.claw.ir.IRNode;
+// import com.claw.ir.IRNodeType;
+// import com.claw.ir.nodes.CatchBlockNode;
+// import com.claw.ir.nodes.FlowToNode;
+// import com.claw.ir.nodes.FunctionDeclarationNode;
+// import com.claw.ir.nodes.TypeDefinitionNode;
+// import com.claw.ir.nodes.VariableDeclarationNode;
+
+// /**
+//  * Java目标语言代码生成器
+//  */
+// public class JavaCodeGenerator implements TargetCodeGenerator {
+    
+//     private final JavaRuntime runtime;
+//     private final JavaTypeMapper typeMapper;
+    
+//     public JavaCodeGenerator() {
+//         this.typeMapper = new JavaTypeMapper();
+//         this.runtime = new JavaRuntime(typeMapper);
+//     }
+    
+//     @Override
+//     public String getTargetLanguage() { return "Java"; }
+    
+//     @Override
+//     public String getFileExtension() { return ".java"; }
+    
+//     @Override
+//     public GenerationResult generate(ClawIR ir, GenerationConfig config) {
+//         GenerationResult result = new GenerationResult();
+        
+//         try {
+//             JavaGenerationContext context = new JavaGenerationContext(
+//                 ir, config, typeMapper, runtime
+//             );
+            
+//             // 1. 处理模块级结构
+//             processModuleImports(ir, context);
+            
+//             // 2. 处理注解（程序注解 → Java代码注入点）
+//             processAnnotations(ir, context);
+            
+//             // 3. 遍历所有顶级节点生成代码
+//             for (IRNode node : ir.getNodes()) {
+//                 generateNode(node, context);
+//             }
+            
+//             // 4. 处理操作流
+//             processFlowModel(ir.getFlowModel(), context);
+            
+//             // 5. 输出文件
+//             String fileName = ir.getModuleName() + ".java";
+//             result.addFile(fileName, context.buildOutput());
+            
+//         } catch (CodeGenerationException e) {
+//             result.addError(e.getMessage());
+//         }
+        
+//         return result;
+//     }
+    
+//     private void processModuleImports(ClawIR ir, JavaGenerationContext ctx) {
+//         ctx.appendLine("package " + ir.getModuleName().toLowerCase() + ";");
+//         ctx.appendLine("");
+        
+//         for (IRNode node : ir.getNodes()) {
+//             if (node.getType() == IRNodeType.IMPORT) {
+//                 String importPath = node.getMeta("path", String.class);
+//                 ctx.appendLine("import " + convertImportPath(importPath) + ";");
+//             }
+//         }
+//         ctx.appendLine("");
+//     }
+    
+//     private void processAnnotations(ClawIR ir, JavaGenerationContext ctx) {
+//         for (IRAnnotation annotation : ir.getAnnotations()) {
+//             switch (annotation.getType()) {
+//                 case BEFORE_NAME:
+//                     ctx.registerConstructorHook(annotation);
+//                     break;
+//                 case AFTER_NAME:
+//                     ctx.registerDestructorHook(annotation);
+//                     break;
+//                 case BEFORE_PROPS:
+//                     ctx.registerPropertyBeforeHook(annotation);
+//                     break;
+//                 case AFTER_PROPS:
+//                     ctx.registerPropertyAfterHook(annotation);
+//                     break;
+//                 case DESCRIPTION:
+//                     // 生成Javadoc + 机器可读注解
+//                     ctx.registerDescription(annotation);
+//                     break;
+//                 default:
+//                     // 其他系统注解 → Javadoc
+//                     ctx.registerSystemAnnotation(annotation);
+//                     break;
+//             }
+//         }
+//     }
+    
+//     private void generateNode(IRNode node, JavaGenerationContext ctx) {
+//         switch (node.getType()) {
+//             case TYPE_DEFINITION:
+//                 generateTypeDefinition((TypeDefinitionNode) node, ctx);
+//                 break;
+//             case FUNCTION_DECLARATION:
+//                 generateFunction((FunctionDeclarationNode) node, ctx);
+//                 break;
+//             case VARIABLE_DECLARATION:
+//                 generateVariableDeclaration((VariableDeclarationNode) node, ctx);
+//                 break;
+//             case IF_STATEMENT:
+//                 generateIfStatement(node, ctx);
+//                 break;
+//             case FOR_LOOP:
+//                 generateForLoop(node, ctx);
+//                 break;
+//             case WHILE_LOOP:
+//                 generateWhileLoop(node, ctx);
+//                 break;
+//             case CATCH_BLOCK:
+//                 generateCatchBlock((CatchBlockNode) node, ctx);
+//                 break;
+//             case FLOW_TO:
+//                 generateFlowTo((FlowToNode) node, ctx);
+//                 break;
+//             default:
+//                 generateGenericNode(node, ctx);
+//                 break;
+//         }
+//     }
+    
+//     private void generateTypeDefinition(TypeDefinitionNode typeDef, 
+//                                          JavaGenerationContext ctx) {
+//         // 生成@@description对应的Javadoc
+//         ctx.emitDescriptionJavadoc(typeDef);
+        
+//         ctx.appendLine("public class " + typeDef.getName() + " {");
+//         ctx.pushIndent();
+        
+//         // 字段
+//         for (FunctionDeclarationNode field : typeDef.getFields()) {
+//             String javaType = typeMapper.mapType(field.getDeclaredType());
+//             ctx.appendLine("private " + javaType + " " + field.getName() + ";");
+//         }
+//         ctx.appendLine("");
+        
+//         // 构造函数（注入 @BeforeName 钩子）
+//         generateConstructorWithHooks(typeDef, ctx);
+        
+//         // 属性的 Getter/Setter（注入 @BeforeProps/@AfterProps 钩子）
+//         for (FunctionDeclarationNode field : typeDef.getFields()) {
+//             generatePropertyAccessors(typeDef, field, ctx);
+//         }
+        
+//         // 方法
+//         for (FunctionDeclarationNode method : typeDef.getMethods()) {
+//             generateFunction(method, ctx);
+//         }
+        
+//         // 析构方法（注入 @AfterName 钩子）
+//         generateDestructorWithHooks(typeDef, ctx);
+        
+//         ctx.popIndent();
+//         ctx.appendLine("}");
+//     }
+    
+//     /**
+//      * 生成带有 @BeforeName 钩子的构造函数
+//      */
+//     private void generateConstructorWithHooks(TypeDefinitionNode typeDef,
+//                                                JavaGenerationContext ctx) {
+//         ctx.appendLine("public " + typeDef.getName() + "() {");
+//         ctx.pushIndent();
+        
+//         // 注入 @BeforeName 注解指定的方法调用
+//         List<IRAnnotation> beforeHooks = ctx.getConstructorHooks();
+//         for (IRAnnotation hook : beforeHooks) {
+//             String methodName = hook.getAttribute("method_name");
+//             ctx.appendLine("this." + methodName + "();");
+//         }
+        
+//         ctx.popIndent();
+//         ctx.appendLine("}");
+//         ctx.appendLine("");
+//     }
+    
+//     /**
+//      * 生成带属性监听钩子的 Getter/Setter
+//      */
+//     private void generatePropertyAccessors(TypeDefinitionNode typeDef,
+//                                             FunctionDeclarationNode field,
+//                                             JavaGenerationContext ctx) {
+//         String javaType = typeMapper.mapType(field.getDeclaredType());
+//         String fieldName = field.getName();
+//         String capitalName = capitalize(fieldName);
+        
+//         // Getter
+//         ctx.appendLine("public " + javaType + " get" + capitalName + "() {");
+//         ctx.pushIndent();
+//         ctx.appendLine("return this." + fieldName + ";");
+//         ctx.popIndent();
+//         ctx.appendLine("}");
+//         ctx.appendLine("");
+        
+//         // Setter（注入属性监听钩子）
+//         ctx.appendLine("public void set" + capitalName + "(" + javaType + " value) {");
+//         ctx.pushIndent();
+        
+//         // @BeforeProps 钩子：变更前
+//         String fullPropName = typeDef.getName().toLowerCase() + "." + fieldName;
+//         List<IRAnnotation> beforeProps = ctx.getPropertyBeforeHooks(fullPropName);
+//         for (IRAnnotation hook : beforeProps) {
+//             ctx.appendLine("// @BeforeProps 自动触发");
+//             ctx.appendLine("this.onBeforePropertyChange(\"" + fieldName + "\", " 
+//                           + "this." + fieldName + ", value);");
+//         }
+        
+//         // 实际赋值
+//         ctx.appendLine(javaType + " oldValue = this." + fieldName + ";");
+//         ctx.appendLine("this." + fieldName + " = value;");
+        
+//         // @AfterProps 钩子：变更后
+//         List<IRAnnotation> afterProps = ctx.getPropertyAfterHooks(fullPropName);
+//         for (IRAnnotation hook : afterProps) {
+//             ctx.appendLine("// @AfterProps 自动触发");
+//             ctx.appendLine("this.onAfterPropertyChange(\"" + fieldName 
+//                           + "\", oldValue, value);");
+//         }
+        
+//         ctx.popIndent();
+//         ctx.appendLine("}");
+//         ctx.appendLine("");
+//     }
+    
+//     /**
+//      * 生成函数（处理三层操作流）
+//      */
+//     private void generateFunction(FunctionDeclarationNode func, 
+//                                    JavaGenerationContext ctx) {
+//         ctx.emitDescriptionJavadoc(func);
+        
+//         String returnType = typeMapper.mapType(func.getReturnType());
+//         StringBuilder params = new StringBuilder();
+//         for (int i = 0; i < func.getParameters().size(); i++) {
+//             ParameterInfo p = func.getParameters().get(i);
+//             if (i > 0) params.append(", ");
+//             params.append(typeMapper.mapType(p.getDeclaredType()))
+//                   .append(" ")
+//                   .append(p.getName());
+//         }
+        
+//         ctx.appendLine("public " + returnType + " " + func.getName() 
+//                       + "(" + params + ") {");
+//         ctx.pushIndent();
+        
+//         // 根据操作流类型生成不同的代码结构
+//         switch (func.getFlowType()) {
+//             case NORMAL:
+//                 generateNormalFlowBody(func, ctx);
+//                 break;
+//             case EXCEPTION:
+//                 generateExceptionFlowBody(func, ctx);
+//                 break;
+//             case BUSINESS:
+//                 generateBusinessFlowBody(func, ctx);
+//                 break;
+//         }
+        
+//         ctx.popIndent();
+//         ctx.appendLine("}");
+//         ctx.appendLine("");
+//     }
+    
+//     /**
+//      * 异常流函数体 - catch与代码块边界一致，不生成堆栈
+//      */
+//     private void generateExceptionFlowBody(FunctionDeclarationNode func,
+//                                             JavaGenerationContext ctx) {
+//         ctx.appendLine("try {");
+//         ctx.pushIndent();
+        
+//         for (IRNode child : func.getChildren()) {
+//             if (child.getType() != IRNodeType.CATCH_BLOCK) {
+//                 generateNode(child, ctx);
+//             }
+//         }
+        
+//         ctx.popIndent();
+        
+//         // catch 块
+//         for (IRNode child : func.getChildren()) {
+//             if (child.getType() == IRNodeType.CATCH_BLOCK) {
+//                 CatchBlockNode catchNode = (CatchBlockNode) child;
+//                 ctx.appendLine("} catch (" + catchNode.getExceptionType() 
+//                               + " " + catchNode.getVariableName() + ") {");
+//                 ctx.pushIndent();
+                
+//                 // 不生成堆栈信息，直接处理
+//                 for (IRNode catchChild : catchNode.getChildren()) {
+//                     generateNode(catchChild, ctx);
+//                 }
+                
+//                 ctx.popIndent();
+//             }
+//         }
+        
+//         ctx.appendLine("}");
+//     }
+    
+//     /**
+//      * 业务逻辑流转 - flow to target，直接跳转不记录堆栈
+//      */
+//     private void generateBusinessFlowBody(FunctionDeclarationNode func,
+//                                            JavaGenerationContext ctx) {
+//         for (IRNode child : func.getChildren()) {
+//             if (child.getType() == IRNodeType.FLOW_TO) {
+//                 FlowToNode flowTo = (FlowToNode) child;
+//                 // Java中用方法调用模拟 flow to（不保存当前上下文）
+//                 ctx.appendLine("// flow to " + flowTo.getTargetName() 
+//                               + " (无堆栈记录)");
+//                 ctx.appendLine(flowTo.getTargetName() + "();");
+//                 ctx.appendLine("return;");
+//             } else {
+//                 generateNode(child, ctx);
+//             }
+//         }
+//     }
+    
+//     private void processFlowModel(FlowModel flowModel, JavaGenerationContext ctx) {
+//         // 三层操作流的统一协调处理已在函数生成时完成
+//         // 此处可以做全局流分析和优化
+//     }
+    
+//     private String convertImportPath(String clawPath) {
+//         return clawPath.replace("/", ".");
+//     }
+    
+//     private String capitalize(String s) {
+//         return s.substring(0, 1).toUpperCase() + s.substring(1);
+//     }
+// }
