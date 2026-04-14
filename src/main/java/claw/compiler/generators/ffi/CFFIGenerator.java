@@ -155,7 +155,6 @@ public class CFFIGenerator {
         StringBuilder sb = new StringBuilder();
         sb.append("/* ========== External Function Declarations (FFI) ========== */\n");
 
-      
         for (ExternFunction func : functions.values()) {
             String returnType = mapClawFFITypeToCType(func.returnType);
             sb.append("extern ").append(returnType).append(" ").append(func.name).append("(");
@@ -383,10 +382,194 @@ private String generatePlatformIfdef(FFIBindingTable.PlatformConstraint constrai
 
     /**
      * 生成 extern 块的 C 代码
+     *
+     * 根据块中的内容生成相应的 C 声明：
+     * - 类型定义（extern 类型）
+     * - 函数声明
+     * - 常量定义
+     * - 结构体定义
+     * - 枚举定义
+     * - 回调类型定义
+     * - 宏定义
+     * - 链接指令的说明
      */
-    private String generateBlockCode(ExternBlock block) {
+    public String generateBlockCode(ExternBlock block) {
         StringBuilder sb = new StringBuilder();
-        // TODO: 实现生成 block 的 C 代码
+
+        // 如果有注释，添加到代码块开头
+        if (block.comment != null && !block.comment.isEmpty()) {
+            sb.append("/* ").append(block.comment).append(" */\n");
+        }
+
+        // 1. 生成类型定义
+        if (!block.types.isEmpty()) {
+            sb.append("/* ========== External Type Definitions ========== */\n");
+            for (ExternType type : block.types) {
+                String cType = mapClawFFITypeToCType(type.cMappingType);
+                sb.append("/* ").append(type.clawTypeName).append(" = ").append(type.cMappingType);
+                if (type.isNullable) sb.append(" (nullable)");
+                sb.append(" */\n");
+
+                // 条件编译保护，避免与头文件中的定义冲突
+                sb.append("#ifndef _CLAW_EXTERN_TYPE_").append(type.clawTypeName.toUpperCase()).append("_\n");
+                sb.append("#define _CLAW_EXTERN_TYPE_").append(type.clawTypeName.toUpperCase()).append("_\n");
+
+                if ("OpaquePointer".equals(type.cMappingType)) {
+                    // 不透明指针：只声明结构体指针
+                    sb.append("/* Opaque type - defined in external library */\n");
+                } else {
+                    sb.append("typedef ").append(cType).append(" claw_").append(type.clawTypeName).append(";\n");
+                }
+
+                sb.append("#endif\n\n");
+            }
+        }
+
+        // 2. 生成函数声明
+        if (!block.functions.isEmpty()) {
+            sb.append("/* ========== Function Declarations ========== */\n");
+            for (ExternFunction func : block.functions) {
+                if (func.deprecated && func.deprecatedAlt != null) {
+                    sb.append("/* ").append(func.name).append(" - deprecated, use ").append(func.deprecatedAlt).append(" */\n");
+                }
+
+                String returnType = mapClawFFITypeToCType(func.returnType);
+                sb.append("/* ").append(func.name).append(" - ");
+                if (func.description != null) {
+                    sb.append(func.description).append(" - ");
+                }
+                sb.append("thread safety: ").append(func.threadSafety);
+                sb.append(" */\n");
+
+                sb.append("extern ").append(returnType).append(" ").append(func.name).append("(");
+
+                for (int i = 0; i < func.params.size(); i++) {
+                    if (i > 0) sb.append(", ");
+                    ExternParam param = func.params.get(i);
+                    sb.append(mapParamTypeToCType(param.type, param.name));
+                }
+
+                if (func.isVariadic) {
+                    if (!func.params.isEmpty()) sb.append(", ");
+                    sb.append("...");
+                }
+
+                sb.append(");\n");
+            }
+            sb.append("\n");
+        }
+
+        // 3. 生成常量定义
+        if (!block.constants.isEmpty()) {
+            sb.append("/* ========== Constant Declarations ========== */\n");
+            for (ExternConstant constant : block.constants) {
+                sb.append("#ifndef ").append(constant.name).append("\n");
+                sb.append("#define ").append(constant.name).append(" (").append(constant.value).append(")\n");
+                sb.append("#endif\n");
+            }
+            sb.append("\n");
+        }
+
+        // 4. 生成结构体定义
+        if (!block.structs.isEmpty()) {
+            sb.append("/* ========== Struct Definitions ========== */\n");
+            for (ExternStruct struct : block.structs) {
+                sb.append("/* ").append(struct.name).append(" */\n");
+                sb.append("typedef struct ").append(struct.name).append(" {\n");
+
+                for (StructField field : struct.fields) {
+
+                    String cType = mapClawFFITypeToCType(field.type);
+                    sb.append("  ").append(cType).append(" ").append(field.name);
+                    if (field.description != null && !field.description.isEmpty()) {
+                        sb.append(" /* ").append(field.description).append(" */");
+                    }
+                    sb.append(";\n");
+                }
+
+                sb.append("} ").append(struct.name).append(";\n\n");
+            }
+        }
+
+        // 5. 生成枚举定义
+        if (!block.enums.isEmpty()) {
+            sb.append("/* ========== Enum Definitions ========== */\n");
+            for (ExternEnum enumDecl : block.enums) {
+                sb.append("/* ").append(enumDecl.name).append(" */\n");
+                sb.append("typedef enum ").append(enumDecl.name).append(" {\n");
+
+                for (EnumMember member : enumDecl.members) {
+                    sb.append("  ").append(member.name);
+
+                    if (member.value != null && !member.value.isEmpty()) {
+                        sb.append(" = ").append(member.value);
+                    }
+
+                    if (member.description != null && !member.description.isEmpty()) {
+                        sb.append(" /* ").append(member.description).append(" */");
+                    }
+                    sb.append(",\n");
+                }
+
+                sb.append("} ").append(enumDecl.name).append(";\n\n");
+            }
+        }
+
+        // 6. 生成回调类型定义
+        if (!block.callbacks.isEmpty()) {
+            sb.append("/* ========== Callback Type Definitions ========== */\n");
+            for (ExternCallback callback : block.callbacks) {
+                sb.append("/* ").append(callback.name).append(" */\n");
+                sb.append("typedef ");
+
+                // 返回类型
+                String returnType = mapClawFFITypeToCType(callback.returnType);
+                sb.append(returnType);
+
+                sb.append(" (*").append(callback.name).append(")(");
+
+                for (int i = 0; i < callback.params.size(); i++) {
+                    if (i > 0) sb.append(", ");
+                    ExternParam param = callback.params.get(i);
+                    sb.append(mapParamTypeToCType(param.type, param.name));
+                }
+
+                sb.append(");\n\n");
+            }
+        }
+
+        // 7. 生成宏定义
+        if (!block.macros.isEmpty()) {
+            sb.append("/* ========== Macro Definitions ========== */\n");
+            for (ExternMacro macro : block.macros) {
+                sb.append("#define ").append(macro.name);
+                if (macro.value != null && !macro.value.isEmpty()) {
+                    sb.append(" ").append(macro.value);
+                }
+                sb.append("\n");
+            }
+            sb.append("\n");
+        }
+
+        // 8. 如果有链接指令，添加说明
+        if (!block.links.isEmpty()) {
+            sb.append("/* ========== Link Directives ========== */\n");
+            for (LinkDirective link : block.links) {
+                sb.append("/* link \"").append(link.libraryName).append("\"");
+                if (link.linkType != LinkType.DYNAMIC) {
+                    sb.append(" [" + link.linkType + "]");
+                }
+                if (link.searchPath != null && !link.searchPath.isEmpty()) {
+                    sb.append(" [path: ").append(link.searchPath).append("]");
+                }
+                if (link.optional) {
+                    sb.append(" [optional]");
+                }
+                sb.append(" */\n");
+            }
+            sb.append("\n");
+        }
+
         return sb.toString();
     }
 

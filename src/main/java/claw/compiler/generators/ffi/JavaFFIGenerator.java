@@ -21,6 +21,11 @@ import java.util.*;
  */
 public class JavaFFIGenerator {
 
+    JavaFFIGenerator(FFIBindingTable table, Strategy strategy) {
+        this(table, strategy, "claw.generated");
+    }
+
+
     /**
      * 代码生成策略
      */
@@ -123,7 +128,7 @@ public class JavaFFIGenerator {
     /**
      * 生成 Panama import 语句
      */
-    private String generatePanamaImports() {
+    public String generatePanamaImports() {
         StringBuilder sb = new StringBuilder();
         sb.append("import java.lang.foreign.*;\n");
         sb.append("import java.lang.invoke.MethodHandle;\n");
@@ -134,7 +139,7 @@ public class JavaFFIGenerator {
     /**
      * 生成静态初始化块：加载库、获取 Linker
      */
-    private String generatePanamaStaticInit() {
+    public String generatePanamaStaticInit() {
         StringBuilder sb = new StringBuilder();
         sb.append("    // ==================== Library Loading ====================\n");
         sb.append("    private static final Linker LINKER = Linker.nativeLinker();\n");
@@ -189,7 +194,7 @@ public class JavaFFIGenerator {
     /**
      * 生成常量定义
      */
-    private String generatePanamaConstants() {
+    public String generatePanamaConstants() {
         Map<String, ExternConstant> constants = bindingTable.getAllConstants();
         if (constants.isEmpty()) return "";
 
@@ -209,7 +214,7 @@ public class JavaFFIGenerator {
     /**
      * 生成 Arena 工具方法
      */
-    private String generateArenaHelpers() {
+    public String generateArenaHelpers() {
         StringBuilder sb = new StringBuilder();
         sb.append("    // ==================== Arena Helpers ====================\n");
 
@@ -249,7 +254,7 @@ public class JavaFFIGenerator {
     /**
      * 生成 MethodHandle（下调句柄）
      */
-    private String generatePanamaFunctionHandles() {
+    public String generatePanamaFunctionHandles() {
         Map<String, ExternFunction> functions = bindingTable.getAllFunctions();
         if (functions.isEmpty()) return "";
 
@@ -303,7 +308,7 @@ public class JavaFFIGenerator {
     /**
      * 生成高层包装方法
      */
-    private String generatePanamaWrapperMethods() {
+    public String generatePanamaWrapperMethods() {
         Map<String, ExternFunction> functions = bindingTable.getAllFunctions();
         if (functions.isEmpty()) return "";
 
@@ -578,7 +583,7 @@ public class JavaFFIGenerator {
     /**
      * Claw FFI 类型 → JNI 类型（JNI 降级策略）
      */
-    private String mapClawTypeToJNIType(String clawType) {
+    public static String mapClawTypeToJNIType(String clawType) {
         if (clawType == null) return "void";
 
         switch (clawType) {
@@ -613,53 +618,54 @@ public class JavaFFIGenerator {
     public String generatePlatformDetection() {
         StringBuilder sb = new StringBuilder();
 
-        sb.append("/**\n");    sb.append(" * Claw FFI 平台检测工具\n");
+        sb.append("/**\n");
+        sb.append(" * Claw FFI 平台检测工具\n");
         sb.append(" */\n");
         sb.append("final class ClawPlatform {\n");
-    
+
         sb.append("    enum OS { WINDOWS, LINUX, MACOS, FREEBSD, ANDROID, UNKNOWN }\n");
         sb.append("    enum Arch { X86_64, ARM64, X86, ARM, UNKNOWN }\n");
-    
+
         sb.append("    static final OS CURRENT_OS;\n");
         sb.append("    static final Arch CURRENT_ARCH;\n");
-    
-        sb.append("    static {\\n");
+
+        sb.append("    static {\n");
         sb.append("        String osName = System.getProperty(\"os.name\", \"\").toLowerCase();\n");
         sb.append("        if (osName.contains(\"win\"))        CURRENT_OS = OS.WINDOWS;\n");
         sb.append("        else if (osName.contains(\"mac\"))   CURRENT_OS = OS.MACOS;\n");
         sb.append("        else if (osName.contains(\"linux\")) CURRENT_OS = OS.LINUX;\n");
         sb.append("        else if (osName.contains(\"freebsd\")) CURRENT_OS = OS.FREEBSD;\n");
         sb.append("        else                                CURRENT_OS = OS.UNKNOWN;\n");
-    
+
         sb.append("        String arch = System.getProperty(\"os.arch\", \"\").toLowerCase();\n");
         sb.append("        if (arch.contains(\"amd64\") || arch.contains(\"x86_64\")) CURRENT_ARCH = Arch.X86_64;\n");
         sb.append("        else if (arch.contains(\"aarch64\") || arch.contains(\"arm64\")) CURRENT_ARCH = Arch.ARM64;\n");
         sb.append("        else if (arch.contains(\"x86\") || arch.contains(\"i386\")) CURRENT_ARCH = Arch.X86;\n");
         sb.append("        else if (arch.contains(\"arm\"))     CURRENT_ARCH = Arch.ARM;\n");
-        sb.append("        else                                CURRENT_ARCH = Arch.UNKNOWN;");
+        sb.append("        else                                CURRENT_ARCH = Arch.UNKNOWN;\n");
         sb.append("    }\n");
-    
+
         sb.append("    static boolean isPlatform(OS... targets) {\n");
         sb.append("        for (OS t : targets) if (t == CURRENT_OS) return true;\n");
         sb.append("        return false;\n");
         sb.append("    }\n");
-    
+
         sb.append("    static boolean isArch(Arch... targets) {\n");
         sb.append("        for (Arch t : targets) if (t == CURRENT_ARCH) return true;\n");
         sb.append("        return false;\n");
         sb.append("    }\n");
-    
+
         // 库文件名生成
         sb.append("    static String libraryFileName(String name) {\n");
-        sb.append("        return switch (CURRENT_OS) {");
+        sb.append("        return switch (CURRENT_OS) {\n");
         sb.append("            case WINDOWS -> name + \".dll\";\n");
         sb.append("            case MACOS   -> \"lib\" + name + \".dylib\";\n");
         sb.append("            default      -> \"lib\" + name + \".so\";\n");
         sb.append("        };\n");
         sb.append("    }\n");
-    
-        sb.append("}new\n");
-    
+
+        sb.append("}\n");
+
         return sb.toString();
     }
     
@@ -701,7 +707,7 @@ public class JavaFFIGenerator {
         return sb.toString();
     }
     
-    private String generateJavaPlatformCondition(FFIBindingTable.PlatformConstraint constraint) {
+    public String generateJavaPlatformCondition(FFIBindingTable.PlatformConstraint constraint) {
         List<String> conditions = new ArrayList<>();
     
         for (String p : constraint.getPlatforms()) {
@@ -725,7 +731,7 @@ public class JavaFFIGenerator {
      * 生成绑定类名
      * "sqlite3" -> "Sqlite3FFI"
      */
-    private String getBindingClassName() {
+    public String getBindingClassName() {
         List<LinkDirective> links = bindingTable.getAllLinks();
         if (links.isEmpty()) {
             return "ExternFFI";
@@ -741,7 +747,7 @@ public class JavaFFIGenerator {
         return bindingTable.findType(typeName) != null;
     }
 
-    private static String toPascalCase(String name) {
+    public static String toPascalCase(String name) {
         if (name == null || name.isEmpty()) return name;
         StringBuilder sb = new StringBuilder();
         boolean capitalizeNext = true;
@@ -758,7 +764,7 @@ public class JavaFFIGenerator {
         return sb.toString();
     }
 
-    private static String toConstantName(String name) {
+    public static String toConstantName(String name) {
         return name.toUpperCase().replaceAll("[^A-Z0-9]", "_");
     }
 }

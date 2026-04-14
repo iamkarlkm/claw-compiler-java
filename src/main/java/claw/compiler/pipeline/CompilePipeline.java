@@ -4,6 +4,7 @@ import claw.compiler.binding.TargetCodeGenerator;
 import claw.compiler.binding.c.CCodeGenerator;
 // import claw.compiler.binding.java.JavaCodeGenerator;
 import claw.compiler.binding.python.PythonCodeGenerator;
+import claw.compiler.generators.ClawIR;
 import claw.compiler.generators.ffi.CFFIGenerator;
 import claw.compiler.generators.ffi.FFIBindingTable;
 import claw.compiler.generators.ffi.JavaFFIGenerator;
@@ -123,19 +124,19 @@ public class CompilePipeline {
         TargetCodeGenerator codeGenerator = createCodeGenerator(targetLanguage);
 
         // 2. 生成中间表示 (IR)
-        // ClawIR ir = buildIR(structureCtx, semanticCtx, annotationResult);
+        ClawIR ir = buildIR(structureCtx, semanticCtx, annotationResult);
 
         // 3. 生成目标代码
-        // String generatedCode = codeGenerator.generate(ir);
+        String generatedCode = codeGenerator.generate(ir);
 
         // 4. 确保输出目录存在
         ensureDirectoryExists(outputDir);
 
         // 5. 写出文件
         String mainOutputPath = getOutputFilePath(codeGenerator);
-        // writeFile(mainOutputPath, generatedCode);
+        writeFile(mainOutputPath, generatedCode);
 
-        CompileResult result = new CompileResult();
+        CompileResult result = new CompileResult(true, generatedCode, null, null);
         result.mainOutputPath = mainOutputPath;
 
         // 6. C 目标的特殊处理
@@ -316,10 +317,7 @@ public class CompilePipeline {
             return new CompileResult(false, null, errorMessages, null);
         }
 
-        // Private constructor - not used
-        private CompileResult() {
-            // This constructor is never used - CompileResult is created via factory methods
-        }
+       
 
         /**
          * 判断编译是否成功
@@ -524,6 +522,11 @@ public class CompilePipeline {
         // 返回完整的 claw_runtime.h 内容
         // 这里省略具体内容，实际就是之前给出的那个完整头文件
         return "/* claw_runtime.h - see previous definition */";
+    }
+
+    private ClawIR buildIR(Object structureCtx, Object semanticCtx, Object annotationResult) {
+        // TODO: implement actual IR construction.
+        return null;
     }
 
     private static String toPascalCase(String name) {

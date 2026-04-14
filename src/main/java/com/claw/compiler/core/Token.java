@@ -24,6 +24,10 @@ public class Token {
         this.startOffset = startOffset;
     }
 
+    public Token(TokenType tokenType, String apublic, int i, int i0) {
+        throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+    }
+
     /** 是否为关键字 */
     public boolean isKeyword() {
         return type.name().startsWith("KW_");

@@ -7,6 +7,7 @@ import claw.compiler.generators.IRGenerator;
 import claw.compiler.generators.IRGenerator.IRBasicBlock;
 import claw.compiler.generators.IRGenerator.IRInstruction;
 import claw.compiler.generators.IRGenerator.OpCode;
+import claw.compiler.generators.IRGenerator.OpCode.*;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -32,6 +33,8 @@ public class PythonCodeGenerator implements TargetCodeGenerator {
     private final PythonRuntime runtime;
     private StringBuilder output;
     private int indentLevel;
+    private List<String> currentFuncParams;  // 当前函数的参数列表
+    private String stackTopVar;  // 当前栈顶变量名
 
     public PythonCodeGenerator() {
         this.runtime = new PythonRuntime();
@@ -120,24 +123,129 @@ public class PythonCodeGenerator implements TargetCodeGenerator {
         List<Object> ops = inst.getOperands();
 
         switch (opCode) {
+            case WHILE_LOOP: {
+                String label = ops.get(0).toString();
+
+                // TODO: 从 IR 中提取循环条件
+                // 这里暂时生成简单的 while True 循环
+                appendLine("while True:  # TODO: extract condition from IR");
+                appendLine("    if not __condition:  # TODO: set condition");
+                appendLine("        break");
+                indentLevel++;
+                break;
+            }
+
+            case FOR_LOOP: {
+                String varName = ops.get(0).toString();
+                String iterable = ops.size() > 1 ? ops.get(1).toString() : "__iterable";
+                appendLine("for " + varName + " in " + iterable + ":");
+                appendLine("    pass  # loop body");
+                indentLevel++;
+                break;
+            }
+
+            case BREAK_LOOP: {
+                appendLine(runtime.generateBreak());
+                break;
+            }
+
+            case CONTINUE_LOOP: {
+                appendLine(runtime.generateContinue());
+                break;
+            }
+
+            case TRY_BLOCK: {
+                appendLine("try:");
+                indentLevel++;
+                // TODO: 生成 try 代码体
+                // 需要从 IR 中提取 try 代码块
+                appendLine("    pass  # try block body");
+                indentLevel--;
+                break;
+            }
+
+            case FINALLY: {
+                appendLine("finally:");
+                indentLevel++;
+                // TODO: 生成 finally 代码体
+                appendLine("    pass  # finally block body");
+                indentLevel--;
+                break;
+            }
+
+            case MULTI_EXCEPTION_CATCH: {
+                // 解析多个异常类型
+                List<String> exTypes = new ArrayList<>();
+                for (int i = 0; i < ops.size(); i++) {
+                    exTypes.add(ops.get(i).toString());
+                }
+
+                // 确定变量名和处理器体
+                String varName = "e";
+                String handlerBody = "pass  # handle exception";
+                if (exTypes.size() > 0) {
+                    varName = ops.get(exTypes.size()).toString();
+                }
+                if (exTypes.size() > 1) {
+                    handlerBody = ops.get(exTypes.size() + 1).toString();
+                }
+
+                // 映射异常类型到 Python 类型
+                String pyTypes = exTypes.stream()
+                    .map(op -> runtime.mapType(op.toString()))
+                    .collect(Collectors.joining(", "));
+                appendLine("except (" + pyTypes + ") as " + varName + ":");
+                appendLine("    " + handlerBody);
+                break;
+            }            
 
             // ====== 函数定义 ======
             case FUNC_DEF: {
                 String funcName = ops.get(0).toString();
                 appendLine("");
-                // 函数签名由后续的参数指令组装；这里先输出注释
-                appendLine(runtime.generateComment("Function: " + funcName));
-                // 实际的 def 行在 FUNC_DEF 时生成（简化版）
-                // 完整版应在 IRGenerator 中把签名信息编码到操作数里
+
+                // 重置当前函数参数列表
+                currentFuncParams = null;
+
+                // 函数名转换：private 函数用下划线前缀
+                String pyFuncName = "private".equals(funcName) ? "_private" : funcName;
+
+                // 生成装饰器（如果有属性监听）
+                List<String> beforeProps = new ArrayList<>();
+                List<String> afterProps = new ArrayList<>();
+
+                // TODO: 从 IR 中提取属性列表
+                // 这里暂时假设所有函数都有完整的属性监听
+
+                // 生成装饰器
+                if (!beforeProps.isEmpty()) {
+                    appendLine("@BeforeProps(" + String.join(", ", beforeProps) + ")");
+                }
+                if (!afterProps.isEmpty()) {
+                    appendLine("@AfterProps(" + String.join(", ", afterProps) + ")");
+                }
+
+                // 生成 def 语句
+                appendLine("def " + pyFuncName + "():");
+
+                // 增加缩进表示函数体开始
+                indentLevel++;
+
+                // 如果有注释，添加到下一行
                 if (inst.getComment() != null) {
                     appendLine(runtime.generateComment(inst.getComment()));
                 }
+
+                appendLine("    pass  # Function body");
                 break;
             }
 
             case FUNC_END: {
                 appendLine("");
+                // 函数结束，减少缩进
                 indentLevel = Math.max(0, indentLevel - 1);
+                // 清空当前函数参数列表
+                currentFuncParams = null;
                 break;
             }
 
@@ -160,7 +268,7 @@ public class PythonCodeGenerator implements TargetCodeGenerator {
             // ====== 变量操作 ======
             case STORE_VAR: {
                 String varName = ops.get(0).toString();
-                appendLine(varName + " = __stack_top");
+                appendLine(varName + " = " + getStackTopVariable());
                 if (inst.getComment() != null) {
                     // 在同一行追加注释
                     replaceLastLineComment(inst.getComment());
@@ -170,12 +278,14 @@ public class PythonCodeGenerator implements TargetCodeGenerator {
 
             case LOAD_VAR: {
                 String varName = ops.get(0).toString();
+                updateStackTopVariable("__stack_top");
                 appendLine("__stack_top = " + varName);
                 break;
             }
 
             case LOAD_CONST: {
                 String value = ops.get(0).toString();
+                updateStackTopVariable("__stack_top");
                 appendLine("__stack_top = " + value);
                 break;
             }
@@ -213,19 +323,29 @@ public class PythonCodeGenerator implements TargetCodeGenerator {
             // ====== 作用域 ======
             case SCOPE_ENTER: {
                 String scopeName = ops.get(0).toString();
-                appendLine(runtime.generateScopeEnter(scopeName));
+                // 生成注释标记作用域开始（保留作为文档）
+                appendLine(runtime.generateComment("=== Scope: " + scopeName + " ==="));
+                // 实际缩进由后续代码决定
                 indentLevel++;
                 break;
             }
 
             case SCOPE_EXIT: {
                 String scopeName = ops.get(0).toString();
+                // 生成注释标记作用域结束
+                appendLine(runtime.generateComment("=== Exit scope: " + scopeName + " ==="));
+                // 减少缩进
                 indentLevel = Math.max(0, indentLevel - 1);
-                appendLine(runtime.generateScopeExit(scopeName));
                 break;
             }
 
             // ====== 控制流 ======
+            case JUMP: {
+                String label = ops.get(0).toString();
+                appendLine(runtime.generateFlowTo(label));
+                break;
+            }
+
             case JUMP_IF_TRUE: {
                 String label = ops.get(0).toString();
                 appendLine(runtime.generateIf("__condition"));
@@ -253,9 +373,6 @@ public class PythonCodeGenerator implements TargetCodeGenerator {
             case AFTER_PROPS_HOOK: {
                 String prop = ops.get(0).toString();
                 appendLine(runtime.generateAfterPropsHook(prop, "__old_value", "__new_value"));
-                if (inst.getComment() != null) {
-                    replaceLastLineComment(inst.getComment());
-                }
                 break;
             }
 
@@ -274,19 +391,6 @@ public class PythonCodeGenerator implements TargetCodeGenerator {
             }
 
             // ====== 属性读写 ======
-            case PROP_GET: {
-                String objField = ops.get(0).toString();
-                int dotIdx = objField.lastIndexOf('.');
-                if (dotIdx > 0) {
-                    String obj = objField.substring(0, dotIdx);
-                    String field = objField.substring(dotIdx + 1);
-                    appendLine("__stack_top = " + runtime.generatePropertyGet(obj, field));
-                } else {
-                    appendLine("__stack_top = " + objField);
-                }
-                break;
-            }
-
             case PROP_SET: {
                 String prop = ops.get(0).toString();
                 appendLine(prop + " = __new_value");
@@ -304,7 +408,11 @@ public class PythonCodeGenerator implements TargetCodeGenerator {
             case ARRAY_GET: {
                 String arrName = ops.get(0).toString();
                 String index = ops.size() > 1 ? ops.get(1).toString() : "0";
-                appendLine("__stack_top = " + runtime.generateArrayGet(arrName, index));
+                // 增加边界检查
+                appendLine("if 0 <= " + index + " < len(" + arrName + "):");
+                appendLine("    __stack_top = " + runtime.generateArrayGet(arrName, index));
+                appendLine("else:");
+                appendLine("    raise IndexError('Array index out of bounds')");
                 break;
             }
 
@@ -312,18 +420,33 @@ public class PythonCodeGenerator implements TargetCodeGenerator {
                 String arrName = ops.get(0).toString();
                 String index = ops.size() > 1 ? ops.get(1).toString() : "0";
                 String value = ops.size() > 2 ? ops.get(2).toString() : "__stack_top";
-                appendLine(runtime.generateArraySet(arrName, index, value));
+                // 增加边界检查
+                appendLine("if 0 <= " + index + " < len(" + arrName + "):");
+                appendLine("    " + runtime.generateArraySet(arrName, index, value));
+                appendLine("else:");
+                appendLine("    raise IndexError('Array index out of bounds')");
                 break;
             }
 
             // ====== 函数调用 ======
-            case CALL: {
+            case FUNC_CALL: {
                 String funcName = ops.get(0).toString();
                 List<String> args = new ArrayList<>();
                 for (int i = 1; i < ops.size(); i++) {
                     args.add(ops.get(i).toString());
                 }
-                appendLine("__stack_top = " + runtime.generateFunctionCall(funcName, args));
+
+                // 生成函数调用
+                String call = runtime.generateFunctionCall(funcName, args);
+
+                // 如果有返回值需要使用，生成赋值
+                String resultVar = getStackTopVariable();
+                if (resultVar != null) {
+                    appendLine(resultVar + " = " + call);
+                } else {
+                    appendLine(call);
+                }
+
                 break;
             }
 
@@ -357,9 +480,9 @@ public class PythonCodeGenerator implements TargetCodeGenerator {
                 break;
             }
 
-            case FLOW_TO: {
-                String target = ops.get(0).toString();
-                appendLine(runtime.generateFlowTo(target));
+            case LABEL: {
+                String labelName = ops.get(0).toString();
+                appendLine(labelName + ":");
                 break;
             }
 
@@ -381,8 +504,19 @@ public class PythonCodeGenerator implements TargetCodeGenerator {
             case TYPE_DEF: {
                 String typeName = ops.get(0).toString();
                 appendLine("");
+
+                // 生成类定义头
                 appendLine(runtime.generateTypeDefinitionHeader(typeName, "public"));
+
+                // 增加缩进表示类体开始
                 indentLevel++;
+
+                // 如果有注释，添加到下一行
+                if (inst.getComment() != null) {
+                    appendLine(runtime.generateComment(inst.getComment()));
+                }
+
+                appendLine("    pass  # Type definition");
                 break;
             }
 
@@ -411,6 +545,21 @@ public class PythonCodeGenerator implements TargetCodeGenerator {
     }
 
     // ==================== 辅助方法 ====================
+
+    private String getFieldName(String propertyPath) {
+        // 从 propertyPath 中提取字段名
+        // 例如: "user.address.city" → "address.city"
+        int lastDot = propertyPath.lastIndexOf('.');
+        return lastDot > 0 ? propertyPath.substring(lastDot + 1) : propertyPath;
+    }
+
+    private String getStackTopVariable() {
+        return "__stack_top";
+    }
+
+    private void updateStackTopVariable(String newVar) {
+        this.stackTopVar = newVar;
+    }
 
     private void appendLine(String line) {
         if (line == null || line.isEmpty()) {

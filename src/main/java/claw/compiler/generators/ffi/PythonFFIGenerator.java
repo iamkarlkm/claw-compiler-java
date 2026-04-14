@@ -47,7 +47,6 @@ public class PythonFFIGenerator {
         sb.append("# ========== Runtime Imports ==========\n");
         sb.append("import claw_runtime\n");
         return sb.toString();
-      
     }
 
     // ================================================================
@@ -347,7 +346,7 @@ public class PythonFFIGenerator {
     /**
      * Claw 类型映射到 Python 类型注解
      */
-    private String mapClawTypeToPythonTypeHint(String clawType) {
+    public static String mapClawTypeToPythonTypeHint(String clawType) {
         if (clawType == null) return null;
 
         switch (clawType) {
@@ -437,7 +436,7 @@ public String generatePlatformConditionalLoading(FFIBindingTable fullTable) {
  * @param indent 缩进
  * @return 加载代码
  */
-private String generateBlockLoadingCode(FFIBindingTable.ExternBlock block, String indent) {
+public String generateBlockLoadingCode(FFIBindingTable.ExternBlock block, String indent) {
     StringBuilder sb = new StringBuilder();
 
     // 生成库加载
@@ -472,7 +471,7 @@ private String generateBlockLoadingCode(FFIBindingTable.ExternBlock block, Strin
     return sb.toString();
 }
 
-private String generatePythonPlatformIf(FFIBindingTable.PlatformConstraint constraint) {
+public String generatePythonPlatformIf(FFIBindingTable.PlatformConstraint constraint) {
     List<String> conditions = new ArrayList<>();
 
     if (!constraint.getPlatforms().isEmpty()) {
@@ -512,11 +511,11 @@ private String generatePythonPlatformIf(FFIBindingTable.PlatformConstraint const
      * "curl" -> "curl"
      * "openssl" -> "openssl"
      */
-    private static String toSafePythonName(String name) {
+    public static String toSafePythonName(String name) {
         return name.replaceAll("[^a-zA-Z0-9_]", "_");
     }
 
-    private String getLibraryFileName(String libraryName) {
+    public String getLibraryFileName(String libraryName) {
         // 简单实现：返回库文件名
         return libraryName;
     }

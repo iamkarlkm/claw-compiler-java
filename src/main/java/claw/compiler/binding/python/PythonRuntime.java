@@ -166,6 +166,19 @@ public class PythonRuntime implements TargetRuntime {
                "    " + handlerBody;
     }
 
+    public String generateMultiCatchBlock(List<String> exceptionTypes, String varName, String handlerBody) {
+        String pyTypes = exceptionTypes.stream()
+            .map(this::mapType)
+            .collect(Collectors.joining(", "));
+        return "except (" + pyTypes + ") as " + varName + ":" +
+               "    " + handlerBody;
+    }
+
+    public String generateFinallyBlock(String finallyBody) {
+        return "finally:" +
+               "    " + finallyBody;
+    }
+
     @Override
     public String generateThrowsDeclaration(List<String> exceptionTypes) {
         // Python 没有 throws 声明语法，用注释标注
@@ -619,7 +632,41 @@ public class PythonRuntime implements TargetRuntime {
         sb.append("            current_label = fj.target_label");
         sb.append("    raise RuntimeError(f\"Unknown flow target: {current_label}\")");
 
-        // 3. 构造/析构钩子协议
+        // 3. 异常处理辅助
+        sb.append("# --- Exception Handling Helpers ---");
+        sb.append("class ExceptionHandlerContext:");
+        sb.append("    \"\"\"异常处理上下文\"\"\"");
+        sb.append("    def __init__(self, catch_var: str):");
+        sb.append("        self.catch_var = catch_var");
+        sb.append("    ");
+        sb.append("    def handle_exception(self, exception_type, exception_var):");
+        sb.append("        pass  # handle exception");
+        sb.append("    ");
+        sb.append("    def release_resources(self):");
+        sb.append("        pass  # release resources");
+
+        sb.append("def catch_multiple_exceptions(exception_types, var_name, handler_body):");
+        sb.append("    \"\"\"捕获多个异常类型\"\"\"");
+        sb.append("    exc_types = ', '.join(exception_types)");
+        sb.append("    return f'except ({exc_types}) as {var_name}:\\n    ' + handler_body");
+        sb.append("    ");
+
+        sb.append("def handle_exception_rethrow(exception_var: str):");
+        sb.append("    \"\"\"重新抛出已捕获的异常\"\"\"");
+        sb.append("    return f'raise {exception_var}'");
+        sb.append("    ");
+
+        sb.append("def suppress_exception(exception_var: str):");
+        sb.append("    \"\"\"抑制异常（静默处理）\"\"\"");
+        sb.append("    return f'pass  # suppress {exception_var}'");
+        sb.append("    ");
+        sb.append("    return f'pass  # suppress {exception_var}'");
+
+        sb.append("def execute_finally_block(finally_body):");
+        sb.append("    \"\"\"执行 finally 块\"\"\"");
+        sb.append("    return f'finally:\\n    ' + finally_body");
+
+        // 4. 构造/析构钩子协议
         sb.append("# --- Lifecycle Hook Protocol ---");
         sb.append("class ClawLifecycle:");
         sb.append("    \"\"\"");

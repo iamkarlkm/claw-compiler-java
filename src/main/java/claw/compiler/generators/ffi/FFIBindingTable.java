@@ -328,9 +328,9 @@ public class FFIBindingTable {
     // ================================================================
     public static class ExternConstant {
 
-        public final String name;
-        public final String type;
-        public final String value;
+        public  String name;
+        public  String type;
+        public  String value;
 
         // ===== 新增字段 =====
         public String group;          // NEW: 常量分组名（如 "SQLITE_STATUS_*"）
@@ -340,6 +340,10 @@ public class FFIBindingTable {
             this.name = name;
             this.type = type;
             this.value = value;
+        }
+
+        ExternConstant() {
+            throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
         }
 
         @Override
@@ -360,8 +364,8 @@ public class FFIBindingTable {
      */
     public static class ExternStruct {
 
-        public final String name;                      // 结构体名
-        public final List<StructField> fields;         // 字段列表
+        public  String name;                      // 结构体名
+        public  List<StructField> fields;         // 字段列表
 
         // ===== 元数据 =====
         public boolean packed;           // NEW: 是否紧凑布局（__attribute__((packed))）
@@ -373,6 +377,10 @@ public class FFIBindingTable {
             this.fields = new ArrayList<>();
             this.packed = false;
             this.alignment = 0;
+        }
+
+        ExternStruct() {
+            throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
         }
 
         /**
@@ -424,8 +432,8 @@ public class FFIBindingTable {
      */
     public static class StructField {
 
-        public final String name;        // 字段名
-        public final String type;        // 字段类型
+        public  String name;        // 字段名
+        public  String type;        // 字段类型
         public int bitfield;          // NEW: 位域宽度（0 = 非位域）
         public String description;       // NEW: 字段描述
 
@@ -452,8 +460,8 @@ public class FFIBindingTable {
      */
     public static class ExternEnum {
 
-        public final String name;                         // 枚举类型名
-        public final List<EnumMember> members;            // 枚举成员列表
+        public  String name;                         // 枚举类型名
+        public  List<EnumMember> members;            // 枚举成员列表
 
         // ===== 元数据 =====
         public String baseType;          // NEW: 底层类型（默认 "Int"）
@@ -465,6 +473,10 @@ public class FFIBindingTable {
             this.members = new ArrayList<>();
             this.baseType = "Int";
             this.isBitmask = false;
+        }
+
+        ExternEnum() {
+            throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
         }
 
         @Override
@@ -487,6 +499,10 @@ public class FFIBindingTable {
             this.value = value;
         }
 
+        EnumMember(String success, String string, String operation_successful) {
+            throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+        }
+
         @Override
         public String toString() {
             return name + " = " + value;
@@ -507,9 +523,9 @@ public class FFIBindingTable {
      */
     public static class ExternCallback {
 
-        public final String name;                    // 回调类型名
-        public final List<ExternParam> params;       // 参数列表
-        public final String returnType;              // 返回类型
+        public  String name;                    // 回调类型名
+        public  List<ExternParam> params;       // 参数列表
+        public  String returnType;              // 返回类型
 
         // ===== 元数据 =====
         public CallingConvention callingConvention;  // NEW: 调用约定
@@ -520,6 +536,10 @@ public class FFIBindingTable {
             this.params = params != null ? params : new ArrayList<>();
             this.returnType = returnType;
             this.callingConvention = CallingConvention.CDECL;
+        }
+
+        ExternCallback() {
+            throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
         }
 
         @Override
@@ -550,8 +570,8 @@ public class FFIBindingTable {
      */
     public static class ExternMacro {
 
-        public final String name;
-        public final MacroKind kind;
+        public  String name;
+        public  MacroKind kind;
 
         // 常量宏
         public String type;              // 类型（常量宏）
@@ -567,6 +587,10 @@ public class FFIBindingTable {
         public ExternMacro(String name, MacroKind kind) {
             this.name = name;
             this.kind = kind;
+        }
+
+        ExternMacro() {
+            throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
         }
 
         @Override
@@ -708,6 +732,10 @@ public class FFIBindingTable {
 
         public List<String> getArchitectures() {
             return architectures.isEmpty() ? Collections.emptyList() : new ArrayList<>(architectures);
+        }
+
+        void addArchitectures(String x86_64) {
+            throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
         }
     }
 

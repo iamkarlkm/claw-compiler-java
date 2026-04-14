@@ -90,6 +90,9 @@ public class IRGenerator {
         EXCEPTION_CATCH,        // 异常捕获（去掉try和{}，保留catch）
         EXCEPTION_THROWS,       // 异常声明（保留throws）
         FLOW_TO,                // 业务逻辑流转（flow to target，不记录堆栈）
+        TRY_BLOCK,              // try 块开始
+        FINALLY,                // finally 块
+        MULTI_EXCEPTION_CATCH,  // 多重异常捕获
         
         // 注解相关 (思想5)
         BEFORE_NAME_HOOK,       // @BeforeName 构造函数钩子
@@ -113,8 +116,13 @@ public class IRGenerator {
         
         // 作用域
         SCOPE_ENTER,            // 进入作用域
-        SCOPE_EXIT              // 退出作用域
-, FUNC_END, DEALLOC, CALL, TYPE_FIELD, TYPE_END
+        SCOPE_EXIT,              // 退出作用域
+        FUNC_END,                // 函数结束
+        DEALLOC,                 // 内存释放
+        CALL,                    // 函数调用
+        TYPE_FIELD,              // 类型字段
+        TYPE_END                 // 类型结束
+        , WHILE_LOOP, FOR_LOOP, BREAK_LOOP, CONTINUE_LOOP
     }
 
     // ==================== IR指令数据结构 ====================
@@ -234,6 +242,26 @@ public class IRGenerator {
             sb.append(indent).append("}");
             return sb.toString();
         }
+
+        public IRInstruction createInstruction(OpCode opCode, String update_age) {
+            throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+        }
+
+        public IRInstruction createInstruction(OpCode opCode, String __left, String __right) {
+            throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+        }
+
+        public IRInstruction createInstruction(OpCode opCode) {
+            throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+        }
+
+        public IRInstruction createInstruction(OpCode opCode, String addThree, String param_a, String param_b, String param_c) {
+            throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+        }
+
+        public IRInstruction createInstruction(OpCode opCode, String add, String param_x, String param_y) {
+            throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+        }
     }
 
     /**
@@ -328,6 +356,14 @@ public class IRGenerator {
             }
             
             return sb.toString();
+        }
+
+        public IRBasicBlock createTopLevelBlock() {
+            throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+        }
+
+        public void addInstruction(IRInstruction funcDef) {
+            throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
         }
     }
 

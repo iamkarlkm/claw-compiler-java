@@ -21,16 +21,39 @@ import java.util.concurrent.ConcurrentHashMap;
 @Builder
 public class CompilationResult {
 
-    static CompilationResult failure(String 配对检查失败, List<String> errors) {
+    static CompilationResult failure(String message, List<String> errors) {
+        List<String> allErrors = new ArrayList<>();
+        if (message != null) {
+            allErrors.add(message);
+        }
+        if (errors != null && !errors.isEmpty()) {
+            allErrors.addAll(errors);
+        }
+        return CompilationResult.builder()
+                .success(false)
+                .errors(allErrors)
+                .elapsedMillis(0)
+                .build();
     }
 
     static CompilationResult success(GeneratedCode generatedCode, long elapsed) {
+        return CompilationResult.builder()
+                .success(true)
+                .generatedCode(generatedCode)
+                .elapsedMillis(elapsed)
+                .build();
     }
 
-    static CompilationResult failure(String string, long elapsed) {
-    }
-
-    private static CompilationResult builder() {
+    static CompilationResult failure(String message, long elapsed) {
+        List<String> errors = new ArrayList<>();
+        if (message != null) {
+            errors.add(message);
+        }
+        return CompilationResult.builder()
+                .success(false)
+                .errors(errors)
+                .elapsedMillis(elapsed)
+                .build();
     }
 
     /** 模块名称 */
@@ -444,44 +467,4 @@ public class CompilationResult {
         );
     }
 
-    private Collection getCompletedPhases() {
-    }
-
-    private Map<? extends String, ? extends String> getGeneratedFiles() {
-    }
-
-    private CompilationResult moduleName(String moduleName) {
-    }
-
-    private String getModuleName() {
-    }
-
-    private CompilationResult success(boolean success) {
-    }
-
-    private CompilationResult errors(List<String> allErrors) {
-    }
-
-    private CompilationResult elapsedMillis(long elapsed) {
-    }
-
-    private CompilationResult build() {
-    }
-
-    private CompilationResult generatedCode(GeneratedCode generatedCode) {
-    }
-
-    private CompilationResult ir(ClawIR ir) {
-    }
-    
-    private CompilationResult generatedFiles(Map<String, String> mergedFiles){
-        
-        
-    }
-
-    private CompilationResult warnings(List<String> mergedWarnings) {
-    }
-
-    private CompilationResult completedPhases(Set<String> mergedPhases) {
-    }
 }
