@@ -1,0 +1,154 @@
+{
+    "name": "claw-compiler-lsp",
+    "displayName": "Claw Compiler Language Server",
+    "description": "Language Server Protocol support for Claw compiler with code completion, syntax checking, and navigation features",
+    "version": "1.0.0",
+    "publisher": "claw",
+    "engines": {
+        "vscode": "^1.70.0"
+    },
+    "categories": [
+        "Programming Languages",
+        "Linters"
+    ],
+    "activationEvents": [
+        "onLanguage:claw"
+    ],
+    "main": "./extension/extension.js",
+    "contributes": {
+        "languages": [
+            {
+                "id": "claw",
+                "aliases": [
+                    "Claw",
+                    "claw"
+                ],
+                "extensions": [
+                    ".claw",
+                    ".claw"
+                ],
+                "configuration": "./language-configuration.json"
+            }
+        ],
+        "grammars": [
+            {
+                "language": "claw",
+                "scopeName": "source.claw",
+                "path": "./syntaxes/claw.tmLanguage.json"
+            }
+        ],
+        "configuration": {
+            "type": "object",
+            "title": "Claw Compiler LSP Configuration",
+            "properties": {
+                "claw.lsp.serverPath": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Path to the LSP server executable. If empty, uses the built-in server."
+                },
+                "claw.lsp.completionEnabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable code completion"
+                },
+                "claw.lsp.diagnosticEnabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable syntax checking and diagnostics"
+                },
+                "claw.lsp.definitionEnabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable jump to definition"
+                },
+                "claw.lsp.referencesEnabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable find references"
+                },
+                "claw.lsp.hoverEnabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable hover information"
+                },
+                "claw.lsp.performance.enableMonitoring": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Enable performance monitoring (shows in output panel)"
+                },
+                "claw.lsp.completionDelay": {
+                    "type": "number",
+                    "default": 100,
+                    "minimum": 0,
+                    "maximum": 1000,
+                    "description": "Delay in milliseconds before showing completion suggestions (debounce)"
+                }
+            }
+        },
+        "commands": [
+            {
+                "command": "claw.restartServer",
+                "title": "Claw: Restart LSP Server",
+                "category": "Claw"
+            },
+            {
+                "command": "claw.showPerformanceReport",
+                "title": "Claw: Show Performance Report",
+                "category": "Claw"
+            },
+            {
+                "command": "claw.clearCache",
+                "title": "Claw: Clear Cache",
+                "category": "Claw"
+            },
+            {
+                "command": "claw.compileDocument",
+                "title": "Claw: Compile Document",
+                "category": "Claw"
+            }
+        ],
+        "menus": {
+            "editor/context": [
+                {
+                    "when": "editorLangId == claw",
+                    "command": "claw.compileDocument",
+                    "group": "claw@1"
+                }
+            ]
+        }
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run compile",
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./",
+        "pretest": "npm run compile && npm run lint",
+        "lint": "eslint src --ext ts",
+        "test": "node ./out/test/runTest.js"
+    },
+    "devDependencies": {
+        "@types/vscode": "^1.70.0",
+        "@types/glob": "^7.1.0",
+        "@types/mocha": "^9.0.0",
+        "@types/node": "^14.14.0",
+        "@typescript-eslint/eslint-plugin": "^5.10.0",
+        "@typescript-eslint/parser": "^5.10.0",
+        "eslint": "^8.0.0",
+        "glob": "^7.1.0",
+        "mocha": "^9.0.0",
+        "typescript": "^4.5.0"
+    },
+    "dependencies": {
+        "vscode-uri": "^3.0.3",
+        "vscode-languageserver": "^7.0.0",
+        "vscode-languageserver-textdocument": "^1.0.4"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/claw-compiler/claw-compiler.git"
+    },
+    "bugs": {
+        "url": "https://github.com/claw-compiler/claw-compiler/issues"
+    },
+    "homepage": "https://github.com/claw-compiler/claw-compiler",
+    "icon": "icons/claw-logo.png"
+}
