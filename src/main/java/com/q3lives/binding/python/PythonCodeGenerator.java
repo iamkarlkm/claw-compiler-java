@@ -35,6 +35,7 @@ public class PythonCodeGenerator implements TargetCodeGenerator {
     private int indentLevel;
     private List<String> currentFuncParams;  // 当前函数的参数列表
     private String stackTopVar;  // 当前栈顶变量名
+    private IRProgram currentProgram;  // 当前IR程序，用于提取元数据
 
     public PythonCodeGenerator() {
         this.runtime = new PythonRuntime();
@@ -59,6 +60,7 @@ public class PythonCodeGenerator implements TargetCodeGenerator {
     public String generate(ClawIR ir) {
         output = new StringBuilder();
         indentLevel = 0;
+        currentProgram = ir.getIrProgram();
 
         // 1. 文件头注释
         appendLine("#!/usr/bin/env python3");
@@ -146,9 +148,18 @@ public class PythonCodeGenerator implements TargetCodeGenerator {
             case TRY_BLOCK: {
                 appendLine("try:");
                 indentLevel++;
-                // TODO: 生成 try 代码体
-                // 需要从 IR 中提取 try 代码块
-                appendLine("    pass  # try block body");
+                // 从指令操作数中提取 try 代码体
+                List<Object> tryOps = inst.getOperands();
+                if (tryOps != null && !tryOps.isEmpty()) {
+                    String tryBody = tryOps.get(0).toString();
+                    if (!"pass".equals(tryBody) && !tryBody.isEmpty()) {
+                        appendLine(tryBody);
+                    } else {
+                        appendLine("pass  # try block body");
+                    }
+                } else {
+                    appendLine("pass  # try block body");
+                }
                 indentLevel--;
                 break;
             }
@@ -156,8 +167,18 @@ public class PythonCodeGenerator implements TargetCodeGenerator {
             case FINALLY: {
                 appendLine("finally:");
                 indentLevel++;
-                // TODO: 生成 finally 代码体
-                appendLine("    pass  # finally block body");
+                // 从指令操作数中提取 finally 代码体
+                List<Object> finallyOps = inst.getOperands();
+                if (finallyOps != null && !finallyOps.isEmpty()) {
+                    String finallyBody = finallyOps.get(0).toString();
+                    if (!"pass".equals(finallyBody) && !finallyBody.isEmpty()) {
+                        appendLine(finallyBody);
+                    } else {
+                        appendLine("pass  # finally block body");
+                    }
+                } else {
+                    appendLine("pass  # finally block body");
+                }
                 indentLevel--;
                 break;
             }
@@ -200,11 +221,23 @@ public class PythonCodeGenerator implements TargetCodeGenerator {
                 String pyFuncName = "private".equals(funcName) ? "_private" : funcName;
 
                 // 生成装饰器（如果有属性监听）
+                // 属性钩子（BEFORE_PROPS_HOOK / AFTER_PROPS_HOOK）会在函数体内单独处理，
+                // 此处装饰器仅从 FUNC_DEF 的扩展操作数中提取（如果编译器前端已嵌入）
                 List<String> beforeProps = new ArrayList<>();
                 List<String> afterProps = new ArrayList<>();
-
-                // TODO: 从 IR 中提取属性列表
-                // 这里暂时假设所有函数都有完整的属性监听
+                if (ops.size() > 3) {
+                    Object propsMeta = ops.get(3);
+                    if (propsMeta instanceof List) {
+                        for (Object p : (List<?>) propsMeta) {
+                            String ps = p.toString();
+                            if (ps.startsWith("before:")) {
+                                beforeProps.add(ps.substring(7));
+                            } else if (ps.startsWith("after:")) {
+                                afterProps.add(ps.substring(6));
+                            }
+                        }
+                    }
+                }
 
                 // 生成装饰器
                 if (!beforeProps.isEmpty()) {
@@ -527,7 +560,13 @@ public class PythonCodeGenerator implements TargetCodeGenerator {
             }
 
             default: {
-                appendLine(runtime.generateComment("TODO: " + opCode.name()));
+                // 未实现的操作码输出为注释，保留操作数和位置信息以便调试
+                String operandInfo = ops.stream()
+                    .map(Object::toString)
+                    .collect(Collectors.joining(", "));
+                appendLine(runtime.generateComment(
+                    "未实现的操作码: " + opCode.name() + "(" + operandInfo + ")"
+                ));
                 break;
             }
         }

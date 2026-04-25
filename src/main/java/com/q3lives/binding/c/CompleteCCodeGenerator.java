@@ -120,6 +120,18 @@ public class CompleteCCodeGenerator implements TargetCodeGenerator {
         // 应用优化
         applyOptimizations();
 
+        // 将头文件和实现文件追加到主输出
+        output.append("\n/* Header Section */\n");
+        output.append(headerOutput.toString());
+        output.append("\n/* Implementation Section */\n");
+        output.append(implOutput.toString());
+
+        // 添加代码统计
+        output.append("\n/* Code Statistics */\n");
+        output.append("/* functions_generated: ").append(symbolTable.getFunctionCount()).append(" */\n");
+        output.append("/* structs_generated: ").append(symbolTable.getTypeCount()).append(" */\n");
+        output.append("/* types_defined: ").append(typeSystem.getTypeCount()).append(" */\n");
+
         return output.toString();
     }
 
@@ -587,6 +599,9 @@ public class CompleteCCodeGenerator implements TargetCodeGenerator {
             generateFunctionImplementations(block);
         }
 
+        // 实现 struct 辅助函数（构造/析构/拷贝）
+        generateStructHelpers();
+
         // 实现内存管理函数
         generateMemoryManagementFunctions();
 
@@ -633,15 +648,38 @@ public class CompleteCCodeGenerator implements TargetCodeGenerator {
     }
 
     private void generateFunctionImplementations(IRBasicBlock block) {
+        // 检查当前块是否包含函数定义
+        boolean hasFuncDef = false;
         for (IRInstruction inst : block.getInstructions()) {
             if (inst.getOpCode() == OpCode.FUNC_DEF) {
-                generateFunctionImplementation(inst);
+                hasFuncDef = true;
+                break;
             }
+        }
+
+        if (hasFuncDef) {
+            generateFunctionImplementation(block);
+        }
+
+        // 递归处理子块（嵌套函数等）
+        for (IRBasicBlock child : block.getChildren()) {
+            generateFunctionImplementations(child);
         }
     }
 
-    private void generateFunctionImplementation(IRInstruction inst) {
-        List<Object> ops = inst.getOperands();
+    private void generateFunctionImplementation(IRBasicBlock block) {
+        // 找到 FUNC_DEF 指令
+        IRInstruction funcDefInst = null;
+        for (IRInstruction inst : block.getInstructions()) {
+            if (inst.getOpCode() == OpCode.FUNC_DEF) {
+                funcDefInst = inst;
+                break;
+            }
+        }
+
+        if (funcDefInst == null) return;
+
+        List<Object> ops = funcDefInst.getOperands();
         String funcName = ops.get(0).toString();
 
         FunctionSymbol function = symbolTable.getFunction(funcName);
@@ -651,13 +689,13 @@ public class CompleteCCodeGenerator implements TargetCodeGenerator {
         String signature = generateFunctionPrototype(function);
         implOutput.append(signature).append(" {\n");
 
-        // 函数体
-        implOutput.append(generateFunctionBody(function));
+        // 函数体 - 从 IR 指令生成
+        implOutput.append(generateFunctionBody(block, function));
 
         implOutput.append("}\n\n");
     }
 
-    private String generateFunctionBody(FunctionSymbol function) {
+    private String generateFunctionBody(IRBasicBlock block, FunctionSymbol function) {
         StringBuilder body = new StringBuilder();
         body.append("    // Function implementation for ").append(function.getName()).append("\n");
 
@@ -669,15 +707,259 @@ public class CompleteCCodeGenerator implements TargetCodeGenerator {
         // 局部变量声明
         body.append(generateLocalVariables(function));
 
-        // 函数逻辑
-        body.append("    // TODO: Implement function logic\n");
+        // 从 IR 指令生成函数体逻辑
+        String instructionsCode = generateInstructionsAsC(block, function);
+        if (instructionsCode.isEmpty()) {
+            body.append("    // (empty function body)\n");
+        } else {
+            body.append(instructionsCode);
+        }
 
-        // 返回值
-        if (!"void".equals(function.getReturnType())) {
+        // 如果函数体没有显式返回且函数有返回值，添加默认返回
+        if (!"void".equals(function.getReturnType()) && !instructionsCode.contains("return ")) {
             body.append("    return ").append(getDefaultValue(function.getReturnType())).append(";\n");
         }
 
         return body.toString();
+    }
+
+    /**
+     * 将 IR 指令块转换为 C 代码
+     */
+    private String generateInstructionsAsC(IRBasicBlock block, FunctionSymbol function) {
+        StringBuilder sb = new StringBuilder();
+
+        for (IRInstruction inst : block.getInstructions()) {
+            // 跳过函数定义和作用域标记指令，避免重复生成
+            if (inst.getOpCode() == OpCode.FUNC_DEF) continue;
+            String cCode = instructionToC(inst, function);
+            if (cCode != null && !cCode.isEmpty()) {
+                sb.append("    ").append(cCode).append("\n");
+            }
+        }
+
+        // 递归处理子块（如循环体、条件分支等）
+        for (IRBasicBlock child : block.getChildren()) {
+            String childCode = generateInstructionsAsC(child, function);
+            if (!childCode.isEmpty()) {
+                sb.append(childCode);
+            }
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * 单条 IR 指令转 C 代码
+     */
+    private String instructionToC(IRInstruction inst, FunctionSymbol function) {
+        OpCode op = inst.getOpCode();
+        List<Object> ops = inst.getOperands();
+
+        switch (op) {
+            case LOAD_CONST: {
+                // 加载常量到临时变量
+                String value = ops.get(0).toString();
+                return "__temp = " + value + ";  // load const";
+            }
+            case LOAD_VAR: {
+                // 加载变量到临时变量
+                String varName = ops.get(0).toString();
+                return "__temp = " + varName + ";  // load var";
+            }
+            case STORE_VAR: {
+                // 将临时变量存储到目标变量
+                String varName = ops.get(0).toString();
+                return varName + " = __temp;  // store var";
+            }
+            case ADD: {
+                String result = ops.get(0).toString();
+                String left = ops.get(1).toString();
+                String right = ops.get(2).toString();
+                return result + " = " + left + " + " + right + ";";
+            }
+            case SUB: {
+                String result = ops.get(0).toString();
+                String left = ops.get(1).toString();
+                String right = ops.get(2).toString();
+                return result + " = " + left + " - " + right + ";";
+            }
+            case MUL: {
+                String result = ops.get(0).toString();
+                String left = ops.get(1).toString();
+                String right = ops.get(2).toString();
+                return result + " = " + left + " * " + right + ";";
+            }
+            case DIV: {
+                String result = ops.get(0).toString();
+                String left = ops.get(1).toString();
+                String right = ops.get(2).toString();
+                return result + " = " + left + " / " + right + ";";
+            }
+            case MOD: {
+                String result = ops.get(0).toString();
+                String left = ops.get(1).toString();
+                String right = ops.get(2).toString();
+                return result + " = " + left + " % " + right + ";";
+            }
+            case CMP_EQ: case CMP_NE: case CMP_LT: case CMP_GT:
+            case CMP_LE: case CMP_GE: {
+                String result = ops.get(0).toString();
+                String left = ops.get(1).toString();
+                String right = ops.get(2).toString();
+                String cOp = opCodeToCOperator(op);
+                return result + " = (" + left + " " + cOp + " " + right + ") ? true : false;";
+            }
+            case AND: {
+                String result = ops.get(0).toString();
+                String left = ops.get(1).toString();
+                String right = ops.get(2).toString();
+                return result + " = " + left + " && " + right + ";";
+            }
+            case OR: {
+                String result = ops.get(0).toString();
+                String left = ops.get(1).toString();
+                String right = ops.get(2).toString();
+                return result + " = " + left + " || " + right + ";";
+            }
+            case NOT: {
+                String result = ops.get(0).toString();
+                String operand = ops.get(1).toString();
+                return result + " = !" + operand + ";";
+            }
+            case FUNC_CALL: {
+                String funcName = ops.get(0).toString();
+                StringBuilder call = new StringBuilder();
+                if (ops.size() > 1) {
+                    call.append(ops.get(1)).append(" = ");
+                }
+                call.append(funcName).append("(");
+                // 收集参数（从第2个操作数开始）
+                for (int i = 2; i < ops.size(); i++) {
+                    if (i > 2) call.append(", ");
+                    call.append(ops.get(i));
+                }
+                call.append(");");
+                return call.toString();
+            }
+            case RETURN: {
+                if (ops.isEmpty()) {
+                    return "return;";
+                } else {
+                    return "return " + ops.get(0) + ";";
+                }
+            }
+            case ALLOC: {
+                String varName = ops.get(0).toString();
+                String typeName = ops.size() > 1 ? ops.get(1).toString() : "void*";
+                String cType = mapCType(typeName);
+                return cType + " " + varName + " = " + getDefaultValue(typeName) + ";  // alloc";
+            }
+            case DEALLOC: {
+                String varName = ops.get(0).toString();
+                return "// dealloc " + varName + " (manual free if needed)";
+            }
+            case JUMP_IF_TRUE: {
+                String label = ops.get(0).toString();
+                return "if (__temp) goto " + label + ";";
+            }
+            case JUMP_IF_FALSE: {
+                String label = ops.get(0).toString();
+                return "if (!__temp) goto " + label + ";";
+            }
+            case JUMP: {
+                String label = ops.get(0).toString();
+                return "goto " + label + ";";
+            }
+            case LABEL: {
+                String label = ops.get(0).toString();
+                return label + ":;";
+            }
+            case SCOPE_ENTER:
+            case SCOPE_EXIT:
+            case NORMAL_FLOW_BEGIN:
+            case NORMAL_FLOW_END:
+                return null; // 控制流标记不生成代码
+            case NOP: {
+                if (!ops.isEmpty()) {
+                    return "// " + ops.get(0);
+                }
+                return null;
+            }
+            case PROP_GET: {
+                String prop = ops.get(0).toString();
+                return "__temp = " + prop + ";  // prop get";
+            }
+            case PROP_SET: {
+                String prop = ops.get(0).toString();
+                return prop + " = __temp;  // prop set";
+            }
+            case ARRAY_NEW: {
+                String arrName = ops.get(0).toString();
+                String elemType = ops.size() > 1 ? ops.get(1).toString() : "void*";
+                String size = ops.size() > 2 ? ops.get(2).toString() : "0";
+                String cElemType = mapCType(elemType);
+                return cElemType + "* " + arrName + " = (" + cElemType + "*)malloc(sizeof(" + cElemType + ") * (" + size + "));  // array new";
+            }
+            case TYPE_CAST: {
+                String result = ops.get(0).toString();
+                String targetType = ops.get(1).toString();
+                String cType = mapCType(targetType);
+                return result + " = (" + cType + ")__temp;  // type cast to " + targetType;
+            }
+            default:
+                return "// " + op.name() + ": " + ops.stream().map(Object::toString).collect(Collectors.joining(", "));
+        }
+    }
+
+    /**
+     * 比较操作码转 C 比较运算符
+     */
+    private String opCodeToCOperator(OpCode op) {
+        return switch (op) {
+            case CMP_EQ -> "==";
+            case CMP_NE -> "!=";
+            case CMP_LT -> "<";
+            case CMP_GT -> ">";
+            case CMP_LE -> "<=";
+            case CMP_GE -> ">=";
+            default -> "==";
+        };
+    }
+
+    private void generateStructHelpers() {
+        implOutput.append("/* ===== Struct Helpers ===== */\n\n");
+        for (TypeSymbol type : symbolTable.getAllTypes()) {
+            if (type.getType() == TypeSymbol.StructType) {
+                generateStructConstructor(type);
+                generateStructDestructor(type);
+            }
+        }
+    }
+
+    private void generateStructConstructor(TypeSymbol type) {
+        String typeName = type.getName();
+        implOutput.append(typeName).append("* ").append(typeName).append("_create(void) {\n");
+        implOutput.append("    ").append(typeName).append("* self = (")
+                  .append(typeName).append("*)malloc(sizeof(").append(typeName).append("));\n");
+        implOutput.append("    if (self != NULL) {\n");
+        implOutput.append("        memset(self, 0, sizeof(").append(typeName).append("));\n");
+        implOutput.append("    }\n");
+        implOutput.append("    return self;\n");
+        implOutput.append("}\n\n");
+    }
+
+    private void generateStructDestructor(TypeSymbol type) {
+        String typeName = type.getName();
+        implOutput.append("void ").append(typeName).append("_destroy(").append(typeName).append("* self) {\n");
+        implOutput.append("    if (self != NULL) {\n");
+        implOutput.append("        // Free nested allocations\n");
+        implOutput.append("        if (self->items != NULL) {\n");
+        implOutput.append("            free(self->items);\n");
+        implOutput.append("        }\n");
+        implOutput.append("        free(self);\n");
+        implOutput.append("    }\n");
+        implOutput.append("}\n\n");
     }
 
     private String generateParameterChecks(FunctionSymbol function) {

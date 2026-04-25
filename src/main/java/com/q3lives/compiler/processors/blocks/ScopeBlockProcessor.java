@@ -25,9 +25,8 @@ public class ScopeBlockProcessor extends BlockProcessor {
     protected ASTNode doProcess(CodeBlock block, List<Token> tokens) {
         ASTNode node = new ASTNode(ASTNode.NodeType.BLOCK);
         node.setLine(block.getStartLine());
-        for (CodeBlock child : block.getChildren()) {
-            // TODO 子块会被对应的处理器处理
-        }
+        // 递归处理当前处理器支持的子块类型
+        processChildren(node, block.getChildren(), tokens);
         return node;
     }
 

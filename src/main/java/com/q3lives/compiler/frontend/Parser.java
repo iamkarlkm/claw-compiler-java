@@ -106,6 +106,7 @@ public class Parser {
             case KW_IMPORT -> parseImport();
             case KW_FUNCTION, KW_PUBLIC, KW_PRIVATE, KW_NORMAL, KW_EXCEPTION, KW_FLOW -> parseFunction();
             case KW_TYPE -> parseTypeDefinition();
+            case KW_ASPECT -> parseAspect();
             case KW_VAR, KW_CONST -> parseVariableDeclaration();
             case KW_EXPORT -> { advance(); yield parseTopLevelDeclaration(); }
             default -> { advance(); yield null; } // 跳过无法识别的Token
@@ -179,6 +180,9 @@ public class Parser {
             node.setAttribute("name", advance().getValue());
         }
 
+        // 解析泛型类型参数 <T, U>
+        parseTypeParameters(node);
+
         // 参数列表
         if (!isAtEnd() && peek().getType() == TokenType.OPEN_PAREN) {
             ASTNode params = parseParameterList();
@@ -188,8 +192,9 @@ public class Parser {
         // 返回类型
         if (!isAtEnd() && peek().getType() == TokenType.OP_ARROW) {
             advance(); // ->
-            if (!isAtEnd()) {
-                node.setAttribute("returnType", advance().getValue());
+            String typeName = parseTypeName();
+            if (typeName != null) {
+                node.setAttribute("returnType", typeName);
             }
         }
 
@@ -214,13 +219,17 @@ public class Parser {
 
                 if (!isAtEnd() && peek().getType() == TokenType.OP_COLON) {
                     advance(); // :
-                    if (!isAtEnd()) {
-                        param.setAttribute("type", advance().getValue());
+                    String typeName = parseTypeName();
+                    if (typeName != null) {
+                        param.setAttribute("type", typeName);
                     }
                 }
                 params.addChild(param);
             }
             if (!isAtEnd() && peek().getType() == TokenType.OP_COMMA) {
+                advance();
+            } else if (!isAtEnd() && peek().getType() != TokenType.CLOSE_PAREN && peek().getType() != TokenType.IDENTIFIER) {
+                // 跳过无法识别的 token（如函数类型中的括号），避免死循环
                 advance();
             }
         }
@@ -238,6 +247,27 @@ public class Parser {
             node.setAttribute("name", advance().getValue());
         }
 
+        // 解析类型参数 <T, U>
+        parseTypeParameters(node);
+
+        if (!isAtEnd() && peek().getType() == TokenType.OPEN_BRACE) {
+            ASTNode body = parseBlock();
+            node.addChild(body);
+        }
+
+        return node;
+    }
+
+    private ASTNode parseAspect() {
+        ASTNode node = new ASTNode(ASTNode.NodeType.AOP_ASPECT);
+        Token aspectToken = advance(); // aspect
+        node.setLine(aspectToken.getLine());
+
+        if (!isAtEnd() && peek().getType() == TokenType.IDENTIFIER) {
+            node.setAttribute("name", advance().getValue());
+        }
+
+        // aspect 体
         if (!isAtEnd() && peek().getType() == TokenType.OPEN_BRACE) {
             ASTNode body = parseBlock();
             node.addChild(body);
@@ -258,7 +288,10 @@ public class Parser {
 
         if (!isAtEnd() && peek().getType() == TokenType.OP_COLON) {
             advance();
-            if (!isAtEnd()) node.setAttribute("type", advance().getValue());
+            String typeName = parseTypeName();
+            if (typeName != null) {
+                node.setAttribute("type", typeName);
+            }
         }
 
         if (!isAtEnd() && peek().getType() == TokenType.OP_ASSIGN) {
@@ -299,6 +332,7 @@ public class Parser {
 
         return switch (t.getType()) {
             case KW_VAR, KW_CONST -> parseVariableDeclaration();
+            case KW_FUNCTION -> parseFunction();
             case KW_RETURN -> parseReturnStatement();
             case KW_IF -> parseIfStatement();
             case KW_FOR -> parseForStatement();
@@ -502,6 +536,74 @@ public class Parser {
         }
     }
 
+    /**
+     * 解析类型名称，支持泛型语法（如 Array<Int>、Map<String, Box<T>>）。
+     * 返回完整的类型名字符串，供类型检查和代码生成使用。
+     */
+    private String parseTypeName() {
+        if (isAtEnd()) return null;
+        Token t = peek();
+        if (t.getType() != TokenType.IDENTIFIER && !isTypeKeyword(t.getType())) {
+            return null;
+        }
+
+        StringBuilder sb = new StringBuilder(advance().getValue());
+
+        // 检查是否有泛型参数 <...\u003e
+        if (!isAtEnd() && peek().getType() == TokenType.OP_LESS) {
+            sb.append("<");
+            advance(); // <
+            int depth = 1;
+
+            while (!isAtEnd() && depth > 0) {
+                Token inner = peek();
+                if (inner.getType() == TokenType.OP_LESS) {
+                    depth++;
+                    sb.append(advance().getValue());
+                } else if (inner.getType() == TokenType.OP_GREATER) {
+                    depth--;
+                    sb.append(advance().getValue());
+                    if (depth == 0) break;
+                } else if (inner.getType() == TokenType.OP_COMMA) {
+                    sb.append(advance().getValue());
+                    sb.append(' ');
+                } else if (inner.getType() == TokenType.IDENTIFIER || isTypeKeyword(inner.getType())) {
+                    sb.append(advance().getValue());
+                } else {
+                    // 其他 token 也直接附加
+                    sb.append(advance().getValue());
+                }
+            }
+        }
+
+        return sb.toString().replaceAll("\\s+", " ").trim();
+    }
+
+    /**
+     * 解析可选的泛型类型参数列表 <T, U>，将结果写入节点的 typeParams 属性。
+     */
+    private void parseTypeParameters(ASTNode node) {
+        if (isAtEnd() || peek().getType() != TokenType.OP_LESS) {
+            return;
+        }
+        advance(); // <
+        StringBuilder sb = new StringBuilder();
+        while (!isAtEnd() && peek().getType() != TokenType.OP_GREATER) {
+            if (peek().getType() == TokenType.IDENTIFIER) {
+                if (sb.length() > 0) sb.append(",");
+                sb.append(advance().getValue());
+            } else if (peek().getType() == TokenType.OP_COMMA) {
+                advance(); // 跳过逗号
+            } else {
+                advance(); // 跳过未知 token
+            }
+        }
+        if (!isAtEnd()) advance(); // >
+        if (sb.length() > 0) {
+            node.setAttribute("typeParams", sb.toString());
+        }
+    }
+
     // ===== 辅助方法 =====
     private Token peek() {
         return pos < tokens.size() ? tokens.get(pos) : null;
@@ -515,5 +617,15 @@ public class Parser {
 
     private boolean isAtEnd() {
         return pos >= tokens.size() || tokens.get(pos).getType() == TokenType.EOF;
+    }
+
+    /**
+     * 判断是否为内置类型关键字（Int、Float、String、Bool、Void、Any）。
+     * 这些关键字在词法分析中被识别为特定 token，但在类型上下文中应视为类型名称。
+     */
+    private boolean isTypeKeyword(TokenType type) {
+        return type == TokenType.KW_INT || type == TokenType.KW_FLOAT ||
+               type == TokenType.KW_STRING || type == TokenType.KW_BOOL ||
+               type == TokenType.KW_VOID || type == TokenType.KW_ANY;
     }
 }

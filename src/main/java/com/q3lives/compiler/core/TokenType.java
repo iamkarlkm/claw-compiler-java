@@ -20,6 +20,8 @@ public enum TokenType {
     KW_NORMAL, KW_EXCEPTION, KW_FLOW,
     // 异常处理关键字
     KW_CATCH, KW_THROWS, KW_THROW,
+    // AOP 关键字
+    KW_ASPECT, KW_POINTCUT,
 
     // ====== 字面量 ======
     LIT_INTEGER, LIT_FLOAT, LIT_STRING, LIT_CHAR,

@@ -56,6 +56,9 @@ public class Tokenizer {
         KEYWORDS.put("catch", TokenType.KW_CATCH);
         KEYWORDS.put("throws", TokenType.KW_THROWS);
         KEYWORDS.put("throw", TokenType.KW_THROW);
+        // AOP 关键字
+        KEYWORDS.put("aspect", TokenType.KW_ASPECT);
+        KEYWORDS.put("pointcut", TokenType.KW_POINTCUT);
     }
 
     /**
@@ -241,26 +244,28 @@ public class Tokenizer {
         SINGLE_CHAR_OPS = Collections.unmodifiableMap(map);
     }
 
-    private static final Map<Character, Map<Character, TokenType>> DOUBLE_CHAR_OPS = Map.of(
-        '-', Map.of('>', TokenType.OP_ARROW),
-        '=', Map.of('=', TokenType.OP_EQUAL),
-        '!', Map.of('=', TokenType.OP_NOT_EQUAL),
-        '<', Map.of('=', TokenType.OP_LESS_EQUAL),
-        '>', Map.of('=', TokenType.OP_GREATER_EQUAL),
-        '&', Map.of('&', TokenType.OP_AND),
-        '|', Map.of('|', TokenType.OP_OR),
-        '+', Map.of('=', TokenType.OP_PLUS_ASSIGN),
-        '-', Map.of('=', TokenType.OP_MINUS_ASSIGN)
+    private static final Map<Character, Map<Character, TokenType>> DOUBLE_CHAR_OPS = Map.ofEntries(
+        Map.entry('-', Map.of('>', TokenType.OP_ARROW, '=', TokenType.OP_MINUS_ASSIGN)),
+        Map.entry('=', Map.of('=', TokenType.OP_EQUAL)),
+        Map.entry('!', Map.of('=', TokenType.OP_NOT_EQUAL)),
+        Map.entry('<', Map.of('=', TokenType.OP_LESS_EQUAL)),
+        Map.entry('>', Map.of('=', TokenType.OP_GREATER_EQUAL)),
+        Map.entry('&', Map.of('&', TokenType.OP_AND)),
+        Map.entry('|', Map.of('|', TokenType.OP_OR)),
+        Map.entry('+', Map.of('=', TokenType.OP_PLUS_ASSIGN))
     );
 
     private TokenType matchOperator(char c, char next) {
         // 首先检查双字符运算符（更精确匹配）
         Map<Character, TokenType> nextMap = DOUBLE_CHAR_OPS.get(c);
         if (nextMap != null) {
-            return nextMap.get(next);
+            TokenType doubleOp = nextMap.get(next);
+            if (doubleOp != null) {
+                return doubleOp;
+            }
         }
 
-        // 然后检查单字符运算符
+        // 回退到单字符运算符
         return SINGLE_CHAR_OPS.get(c);
     }
 

@@ -458,10 +458,33 @@ public class JavaRuntime implements TargetRuntime {
 
   
     public String generateImport(String modulePath, String symbolName) {
+        // 标准库映射：Claw 模块名 -> Java 包名
+        String javaModule = mapStdLibraryToJava(modulePath);
         if (symbolName != null && !symbolName.isEmpty()) {
-            return "import " + modulePath + "." + symbolName + ";";
+            return "import " + javaModule + "." + symbolName + ";";
         }
-        return "import " + modulePath + ".*;";
+        return "import " + javaModule + ".*;";
+    }
+
+    /**
+     * 将 Claw 标准库模块名映射到 Java 包名。
+     */
+    private String mapStdLibraryToJava(String modulePath) {
+        return switch (modulePath) {
+            case "std.io"        -> "java.io";
+            case "std.string"    -> "java.lang"; // String 在 java.lang
+            case "std.math"      -> "java.lang.Math";
+            case "std.memory"    -> "java.lang.ref";
+            case "std.time"      -> "java.time";
+            case "std.collections" -> "java.util";
+            case "std.net"       -> "java.net";
+            case "std.json"      -> "com.fasterxml.jackson.databind"; // 常用 JSON 库
+            case "std.database"  -> "java.sql";
+            case "std.concurrent"-> "java.util.concurrent";
+            case "std.regex"     -> "java.util.regex";
+            case "std.stream"    -> "java.util.stream";
+            default              -> modulePath;
+        };
     }
 
   
@@ -824,12 +847,30 @@ public class JavaRuntime implements TargetRuntime {
 
         sb.append("    /**\n");
         sb.append("     * 执行目标方法（Around 通知中使用）\n");
-        sb.append("     * 在实际应用中，这需要通过反射调用\n");
+        sb.append("     * 通过反射调用被拦截的方法\n");
         sb.append("     */\n");
         sb.append("    public Object proceed() throws Throwable {\n");
-        sb.append("        // TODO: 实现方法调用\n");
-        sb.append("        // 需要通过反射或动态代理调用被拦截的方法\n");
-        sb.append("        return null;\n");
+        sb.append("        if (target == null || methodName == null) {\n");
+        sb.append("            return null;\n");
+        sb.append("        }\n");
+        sb.append("        Object[] actualArgs = args != null ? args : new Object[0];\n");
+        sb.append("        Class<?>[] argTypes = new Class[actualArgs.length];\n");
+        sb.append("        for (int i = 0; i < actualArgs.length; i++) {\n");
+        sb.append("            argTypes[i] = (actualArgs[i] != null) ? actualArgs[i].getClass() : Object.class;\n");
+        sb.append("        }\n");
+        sb.append("        try {\n");
+        sb.append("            java.lang.reflect.Method method = target.getClass().getMethod(methodName, argTypes);\n");
+        sb.append("            method.setAccessible(true);\n");
+        sb.append("            return method.invoke(target, actualArgs);\n");
+        sb.append("        } catch (NoSuchMethodException e) {\n");
+        sb.append("            for (java.lang.reflect.Method m : target.getClass().getMethods()) {\n");
+        sb.append("                if (m.getName().equals(methodName)) {\n");
+        sb.append("                    m.setAccessible(true);\n");
+        sb.append("                    return m.invoke(target, actualArgs);\n");
+        sb.append("                }\n");
+        sb.append("            }\n");
+        sb.append("            throw new RuntimeException(\"Method not found: \" + methodName, e);\n");
+        sb.append("        }\n");
         sb.append("    }\n");
         sb.append("}\n");
 

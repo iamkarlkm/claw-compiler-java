@@ -58,7 +58,9 @@ public class ASTNode {
         // 注解
         ANNOTATION,
         // 操作流
-        FLOW_STATEMENT, IDENTIFIER, LITERAL,AOP_ASPECT,AOP_ADVICE
+        FLOW_STATEMENT, IDENTIFIER, LITERAL,AOP_ASPECT,AOP_ADVICE,
+        // 泛型
+        GENERIC_TYPE
     }
 
     private final NodeType type;

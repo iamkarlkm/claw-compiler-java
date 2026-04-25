@@ -57,16 +57,50 @@ public class LiteralProcessor {
         catch (NumberFormatException e) { return 0.0; }
     }
 
+    /**
+     * 解析字符串字面量，正确处理转义序列。
+     * 支持: \\n, \\t, \\r, \\b, \\f, \\\", \\', \\\\, \\uXXXX
+     */
     private String parseString(String value) {
-        if (value.length() >= 2) {
-            return value.substring(1, value.length() - 1)
-                    .replace("\\", "");//TODO
-                    //.replace("\	", "	")
-                    // .replace("\\"", "\"")
-                    // .replace("\'", "'")
-                    // .replace("\\", "\");
+        if (value.length() < 2) {
+            return value;
         }
-        return value;
+        String content = value.substring(1, value.length() - 1);
+        StringBuilder result = new StringBuilder(content.length());
+        for (int i = 0; i < content.length(); i++) {
+            char c = content.charAt(i);
+            if (c == '\\' && i + 1 < content.length()) {
+                char next = content.charAt(i + 1);
+                switch (next) {
+                    case 'n' -> result.append('\n');
+                    case 't' -> result.append('\t');
+                    case 'r' -> result.append('\r');
+                    case 'b' -> result.append('\b');
+                    case 'f' -> result.append('\f');
+                    case '"' -> result.append('"');
+                    case '\'' -> result.append('\'');
+                    case '\\' -> result.append('\\');
+                    case 'u' -> {
+                        if (i + 5 < content.length()) {
+                            String hex = content.substring(i + 2, i + 6);
+                            try {
+                                result.append((char) Integer.parseInt(hex, 16));
+                                i += 4;
+                            } catch (NumberFormatException e) {
+                                result.append(c);
+                            }
+                        } else {
+                            result.append(c);
+                        }
+                    }
+                    default -> result.append(next);
+                }
+                i++;
+            } else {
+                result.append(c);
+            }
+        }
+        return result.toString();
     }
 
     public Object process(List<Token> tokens, HierarchicalBlocks blocks, SemanticContext ctx) {
@@ -89,4 +123,3 @@ public class LiteralProcessor {
         return ctx;
     }
 }
-

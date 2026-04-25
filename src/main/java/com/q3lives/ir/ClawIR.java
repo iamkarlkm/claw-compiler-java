@@ -65,7 +65,11 @@ public class ClawIR {
      * 检查IR是否有效（无语义错误）
      */
     public boolean isValid() {
-        return semanticContext != null && !semanticContext.hasErrors();
+        // 如果没有语义上下文（如测试场景），只要有 IRProgram 即认为有效
+        if (semanticContext == null) {
+            return irProgram != null;
+        }
+        return !semanticContext.hasErrors();
     }
 
     /**

@@ -605,8 +605,15 @@ public class EnhancedJavaCodeGenerator implements TargetCodeGenerator {
     private String extractClassName(ClawIR ir) {
         String moduleName = ir.getModuleName();
         if (moduleName != null && !moduleName.isEmpty()) {
-            // 将模块名转换为类名
-            return moduleName.substring(moduleName.lastIndexOf('/') + 1);
+            // 将模块名转换为类名，去掉路径和扩展名
+            int lastSlash = moduleName.lastIndexOf('/');
+            int lastDot = moduleName.lastIndexOf('.');
+            int start = lastSlash >= 0 ? lastSlash + 1 : 0;
+            int end = lastDot > start ? lastDot : moduleName.length();
+            String name = moduleName.substring(start, end);
+            if (!name.isEmpty()) {
+                return Character.toUpperCase(name.charAt(0)) + name.substring(1);
+            }
         }
         return "ClawProgram";
     }

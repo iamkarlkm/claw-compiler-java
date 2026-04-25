@@ -1,9 +1,5 @@
 # Claw 编译器 Java 实现
 
-[![Java](https://img.shields.io/badge/Java-17-blue.svg)](https://openjdk.java.net/projects/jdk/17/)
-[![Maven](https://img.shields.io/badge/Maven-3.6+-orange.svg)](https://maven.apache.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-3.0.0-red.svg)](https://github.com/your-repo/claw-compiler-java)
 
 Claw 是一个现代化的多目标编程语言，此项目是 Claw 编译器的 Java 实现。它可以将 Claw 源代码编译为 Java、Python 和 C 代码。
 

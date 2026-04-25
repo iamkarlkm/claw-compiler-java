@@ -373,10 +373,32 @@ public class PythonRuntime implements TargetRuntime {
 
     @Override
     public String generateImport(String modulePath, String symbolName) {
+        String pyModule = mapStdLibraryToPython(modulePath);
         if (symbolName != null && !symbolName.isEmpty()) {
-            return "from " + modulePath + " import " + symbolName;
+            return "from " + pyModule + " import " + symbolName;
         }
-        return "import " + modulePath;
+        return "import " + pyModule;
+    }
+
+    /**
+     * 将 Claw 标准库模块名映射到 Python 模块名。
+     */
+    private String mapStdLibraryToPython(String modulePath) {
+        return switch (modulePath) {
+            case "std.io"        -> "io";
+            case "std.string"    -> "string";
+            case "std.math"      -> "math";
+            case "std.memory"    -> "gc";
+            case "std.time"      -> "datetime";
+            case "std.collections" -> "collections";
+            case "std.net"       -> "socket";
+            case "std.json"      -> "json";
+            case "std.database"  -> "sqlite3";
+            case "std.concurrent"-> "threading";
+            case "std.regex"     -> "re";
+            case "std.stream"    -> "itertools";
+            default              -> modulePath;
+        };
     }
 
     @Override

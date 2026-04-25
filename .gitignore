@@ -11,6 +11,7 @@ src/broken-test-backup/
 .idea/
 *.iml
 .vscode/
+.claude/
 
 # OS
 .DS_Store

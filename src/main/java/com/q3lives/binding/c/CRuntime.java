@@ -442,17 +442,21 @@ public class CRuntime implements TargetRuntime {
     @Override
 public String generateImport(String modulePath, String symbolName) {
     // 标准库映射
-    Map<String, String> stdMapping = Map.of(
-        "std.io",      "<stdio.h>",
-        "std.string",  "<string.h>",
-        "std.math",    "<math.h>",
-        "std.memory",  "<stdlib.h>",
-        "std.bool",    "<stdbool.h>",
-        "std.time",    "<time.h>",
-        "std.assert",  "<assert.h>",
-        "std.errno",   "<errno.h>",
-        "std.signal",  "<signal.h>",
-        "std.thread",  "<pthread.h>"
+    Map<String, String> stdMapping = Map.ofEntries(
+        Map.entry("std.io",       "<stdio.h>"),
+        Map.entry("std.string",   "<string.h>"),
+        Map.entry("std.math",     "<math.h>"),
+        Map.entry("std.memory",   "<stdlib.h>"),
+        Map.entry("std.bool",     "<stdbool.h>"),
+        Map.entry("std.time",     "<time.h>"),
+        Map.entry("std.assert",   "<assert.h>"),
+        Map.entry("std.errno",    "<errno.h>"),
+        Map.entry("std.signal",   "<signal.h>"),
+        Map.entry("std.thread",   "<pthread.h>"),
+        Map.entry("std.collections", "<stdlib.h>"), // C 中集合需自定义，复用 stdlib
+        Map.entry("std.net",      "<sys/socket.h>"),
+        Map.entry("std.regex",    "<regex.h>"),
+        Map.entry("std.concurrent", "<pthread.h>")
     );
 
     String mapped = stdMapping.get(modulePath);

@@ -93,13 +93,23 @@ public class TypeChecker {
             case RETURN_STATEMENT:
                 return checkReturnStatement(node, env);
             case IDENTIFIER:
+            case IDENTIFIER_REF:
                 return checkIdentifier(node, env);
             case LITERAL:
+            case INTEGER_LITERAL:
+            case FLOAT_LITERAL:
+            case STRING_LITERAL:
+            case BOOLEAN_LITERAL:
+            case NULL_LITERAL:
                 return checkLiteral(node);
             case TYPE_DEFINITION:
                 return checkTypeDefinition(node, env);
             case BLOCK:
                 return checkBlock(node, env);
+            case AOP_ASPECT:
+                return checkAspect(node, env);
+            case AOP_ADVICE:
+                return checkAdvice(node, env);
             default:
                 // 递归检查子节点
                 for (ASTNode child : node.getChildren()) {
@@ -118,23 +128,27 @@ public class TypeChecker {
 
     private String checkFunctionDeclaration(ASTNode node, TypeEnvironment env) {
         String funcName = node.getProperty("name");
-        String returnType = node.getProperty("returnType");
-        if (returnType == null) {
-            returnType = "Void";
-        }
+        String declaredReturnType = node.getProperty("returnType");
 
-        log.debug("检查函数: {} -> {}", funcName, returnType);
+        log.debug("检查函数: {} -> {}", funcName, declaredReturnType);
 
         // 创建函数作用域
         TypeEnvironment funcEnv = env.createChild();
-        funcEnv.setExpectedReturnType(returnType);
+
+        // 注册泛型类型参数
+        String typeParams = node.getProperty("typeParams");
+        if (typeParams != null && !typeParams.isEmpty()) {
+            for (String tp : typeParams.split(",")) {
+                funcEnv.defineType(tp.trim());
+            }
+        }
 
         // 注册参数类型
         ASTNode params = node.getChildByType(ASTNode.NodeType.PARAMETER_LIST);
         if (params != null) {
             for (ASTNode param : params.getChildren()) {
                 String paramName = param.getProperty("name");
-                String paramType = param.getProperty("paramType");
+                String paramType = param.getProperty("type");
                 if (paramType == null) {
                     paramType = "Any";
                     warnings.add(String.format("参数 '%s' 未指定类型，默认为 Any", paramName));
@@ -143,22 +157,105 @@ public class TypeChecker {
             }
         }
 
-        // 注册函数到当前环境
-        env.defineFunction(funcName, returnType);
-
         // 检查函数体
         ASTNode body = node.getChildByType(ASTNode.NodeType.BLOCK);
+        String inferredReturnType = declaredReturnType;
         if (body != null) {
+            if (declaredReturnType == null || declaredReturnType.isEmpty()) {
+                // 未声明返回类型：从函数体推断
+                inferredReturnType = inferReturnType(body, funcEnv);
+                if (inferredReturnType == null) {
+                    inferredReturnType = "Void";
+                }
+                funcEnv.setExpectedReturnType(inferredReturnType);
+                // 将推断结果写回 AST，供代码生成器使用
+                node.setAttribute("returnType", inferredReturnType);
+                log.info("推断函数 '{}' 的返回类型为: {}", funcName, inferredReturnType);
+            } else {
+                funcEnv.setExpectedReturnType(declaredReturnType);
+            }
+            // 正式检查函数体（此时 expectedReturnType 已确定）
             checkNode(body, funcEnv);
+        } else if (declaredReturnType == null || declaredReturnType.isEmpty()) {
+            inferredReturnType = "Void";
+            node.setAttribute("returnType", inferredReturnType);
         }
+
+        // 注册函数到当前环境
+        env.defineFunction(funcName, inferredReturnType);
 
         return "Void";
     }
 
+    /**
+     * 从函数体推断返回类型：收集所有 return 语句的类型并统一。
+     */
+    private String inferReturnType(ASTNode body, TypeEnvironment env) {
+        List<String> returnTypes = new ArrayList<>();
+        collectReturnTypes(body, env, returnTypes);
+
+        if (returnTypes.isEmpty()) {
+            return "Void";
+        }
+
+        String unified = returnTypes.get(0);
+        for (int i = 1; i < returnTypes.size(); i++) {
+            String next = returnTypes.get(i);
+            if (unified.equals(next)) {
+                continue;
+            }
+            // Int 与 Float 混用时提升为 Float
+            if (("Int".equals(unified) && "Float".equals(next)) ||
+                ("Float".equals(unified) && "Int".equals(next))) {
+                unified = "Float";
+                continue;
+            }
+            // Any 与任何类型混用视为 Any
+            if ("Any".equals(unified) || "Any".equals(next)) {
+                unified = "Any";
+                continue;
+            }
+            // 其他不兼容类型组合
+            errors.add(String.format("返回类型不一致: %s 与 %s", unified, next));
+            return "Any";
+        }
+        return unified;
+    }
+
+    /**
+     * 递归收集函数体内所有 return 语句的表达式类型。
+     */
+    private void collectReturnTypes(ASTNode node, TypeEnvironment env, List<String> returnTypes) {
+        if (node == null) return;
+
+        if (node.getType() == ASTNode.NodeType.RETURN_STATEMENT) {
+            if (node.getChildren().isEmpty()) {
+                returnTypes.add("Void");
+            } else {
+                String exprType = checkNode(node.getChildren().get(0), env);
+                returnTypes.add(exprType);
+            }
+            return;
+        }
+
+        // 跳过嵌套函数定义（避免将其 return 计入外层函数）
+        if (node.getType() == ASTNode.NodeType.FUNCTION_DECLARATION) {
+            return;
+        }
+
+        for (ASTNode child : node.getChildren()) {
+            collectReturnTypes(child, env, returnTypes);
+        }
+    }
+
     private String checkVariableDeclaration(ASTNode node, TypeEnvironment env) {
         String varName = node.getProperty("name");
+        // Parser 存储变量类型为 "type"，保持向后兼容也检查 "varType"
         String declaredType = node.getProperty("varType");
-        boolean isConst = "true".equals(node.getProperty("const"));
+        if (declaredType == null) {
+            declaredType = node.getProperty("type");
+        }
+        boolean isConst = !"true".equals(node.getProperty("mutable"));
 
         // 如果有初始化表达式，检查类型
         String inferredType = null;
@@ -395,6 +492,15 @@ public class TypeChecker {
 
         // 检查类型体
         TypeEnvironment typeEnv = env.createChild();
+
+        // 注册泛型类型参数
+        String typeParams = node.getProperty("typeParams");
+        if (typeParams != null && !typeParams.isEmpty()) {
+            for (String tp : typeParams.split(",")) {
+                typeEnv.defineType(tp.trim());
+            }
+        }
+
         for (ASTNode child : node.getChildren()) {
             checkNode(child, typeEnv);
         }
@@ -409,6 +515,28 @@ public class TypeChecker {
             lastType = checkNode(child, blockEnv);
         }
         return lastType;
+    }
+
+    private String checkAspect(ASTNode node, TypeEnvironment env) {
+        String aspectName = node.getProperty("name");
+        log.debug("检查切面定义: {}", aspectName);
+        env.defineType(aspectName);
+
+        TypeEnvironment aspectEnv = env.createChild();
+        for (ASTNode child : node.getChildren()) {
+            checkNode(child, aspectEnv);
+        }
+        return "Void";
+    }
+
+    private String checkAdvice(ASTNode node, TypeEnvironment env) {
+        String adviceType = node.getProperty("adviceType");
+        log.debug("检查通知: {} - {}", adviceType, node.getProperty("pointcut"));
+
+        for (ASTNode child : node.getChildren()) {
+            checkNode(child, env);
+        }
+        return "Void";
     }
 
     /**

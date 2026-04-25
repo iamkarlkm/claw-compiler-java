@@ -5,7 +5,7 @@
          http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.claw</groupId>
+    <groupId>com.q3lives</groupId>
     <artifactId>claw-compiler</artifactId>
     <version>3.0.0</version>
     <packaging>jar</packaging>
@@ -100,7 +100,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.claw.compiler.ClawCompiler</mainClass>
+                            <mainClass>com.q3lives.compiler.ClawCompiler</mainClass>
                         </manifest>
                     </archive>
                 </configuration>

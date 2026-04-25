@@ -50,7 +50,7 @@ public class CompletionProvider {
     private static final List<String> TRIGGER_CHARS = List.of(".", "(", " ", "@");
 
     // 类型补全列表
-    private static final List<com.q3lives.lsp.protocol.CompletionItem> TYPE_COMPLETIONS = List.of(
+    protected static final List<com.q3lives.lsp.protocol.CompletionItem> TYPE_COMPLETIONS = List.of(
         com.q3lives.lsp.protocol.CompletionItem.createTypeCompletion("Int", "整数类型 (int)"),
         com.q3lives.lsp.protocol.CompletionItem.createTypeCompletion("Float", "浮点数类型 (float)"),
         com.q3lives.lsp.protocol.CompletionItem.createTypeCompletion("String", "字符串类型"),
@@ -60,7 +60,7 @@ public class CompletionProvider {
     );
 
     // 函数补全列表
-    private static final List<com.q3lives.lsp.protocol.CompletionItem> FUNCTION_COMPLETIONS = List.of(
+    protected static final List<com.q3lives.lsp.protocol.CompletionItem> FUNCTION_COMPLETIONS = List.of(
         com.q3lives.lsp.protocol.CompletionItem.createFunctionCompletion("print", "String", "Void", "打印输出"),
         com.q3lives.lsp.protocol.CompletionItem.createFunctionCompletion("input", "String", "String", "用户输入"),
         com.q3lives.lsp.protocol.CompletionItem.createFunctionCompletion("parseInt", "String", "Int", "字符串转整数"),
@@ -69,7 +69,7 @@ public class CompletionProvider {
     );
 
     // 注解补全列表
-    private static final List<com.q3lives.lsp.protocol.CompletionItem> ANNOTATION_COMPLETIONS = List.of(
+    protected static final List<com.q3lives.lsp.protocol.CompletionItem> ANNOTATION_COMPLETIONS = List.of(
         com.q3lives.lsp.protocol.CompletionItem.createAnnotationCompletion("@Before", "@Before - 前置通知"),
         com.q3lives.lsp.protocol.CompletionItem.createAnnotationCompletion("@After", "@After - 后置通知"),
         com.q3lives.lsp.protocol.CompletionItem.createAnnotationCompletion("@Around", "@Around - 环绕通知"),
@@ -79,7 +79,7 @@ public class CompletionProvider {
     );
 
     // 关键字补全列表
-    private static final List<com.q3lives.lsp.protocol.CompletionItem> KEYWORD_COMPLETIONS = List.of(
+    protected static final List<com.q3lives.lsp.protocol.CompletionItem> KEYWORD_COMPLETIONS = List.of(
         com.q3lives.lsp.protocol.CompletionItem.createTypeCompletion("if", "if - 条件语句"),
         com.q3lives.lsp.protocol.CompletionItem.createTypeCompletion("else", "else - 条件语句"),
         com.q3lives.lsp.protocol.CompletionItem.createTypeCompletion("while", "while - 循环语句"),
@@ -246,28 +246,28 @@ public class CompletionProvider {
     /**
      * 检查是否是修饰符开始字符
      */
-    private boolean isModifierStart(char c) {
+    protected boolean isModifierStart(char c) {
         return c == ' ' || c == '\t';
     }
 
     /**
      * 检查是否是类型开始字符
      */
-    private boolean isTypeStart(char c) {
+    protected boolean isTypeStart(char c) {
         return Character.isUpperCase(c);
     }
 
     /**
      * 检查是否是变量开始字符
      */
-    private boolean isVariableStart(char c) {
+    protected boolean isVariableStart(char c) {
         return Character.isLetterOrDigit(c) || c == '_';
     }
 
     /**
      * 获取变量补全列表
      */
-    private List<com.q3lives.lsp.protocol.CompletionItem> getVariableCompletions() {
+    protected List<com.q3lives.lsp.protocol.CompletionItem> getVariableCompletions() {
         List<com.q3lives.lsp.protocol.CompletionItem> completions = new ArrayList<>();
 
         // TODO: 从语义上下文中获取变量列表
@@ -281,7 +281,7 @@ public class CompletionProvider {
     /**
      * 获取修饰符补全列表
      */
-    private List<com.q3lives.lsp.protocol.CompletionItem> getModifierCompletions() {
+    protected List<com.q3lives.lsp.protocol.CompletionItem> getModifierCompletions() {
         List<com.q3lives.lsp.protocol.CompletionItem> completions = new ArrayList<>();
 
         // TODO: 从语义上下文中获取修饰符列表
@@ -295,7 +295,7 @@ public class CompletionProvider {
     /**
      * 获取点操作符补全列表
      */
-    private List<com.q3lives.lsp.protocol.CompletionItem> getDotCompletions() {
+    protected List<com.q3lives.lsp.protocol.CompletionItem> getDotCompletions() {
         List<com.q3lives.lsp.protocol.CompletionItem> completions = new ArrayList<>();
 
         // TODO: 从语义上下文中获取对象成员列表
@@ -327,13 +327,14 @@ public class CompletionProvider {
         KEYWORD,        // 关键字补全
         MODIFIER,       // 修饰符补全
         DOT,            // 点操作符补全
+        SNIPPET,        // 代码片段补全
         UNKNOWN         // 未知上下文
     }
 
     /**
      * 转换自定义 CompletionItem 到 LSP4J CompletionItem
      */
-    private List<org.eclipse.lsp4j.CompletionItem> convertToLsp4j(List<com.q3lives.lsp.protocol.CompletionItem> items) {
+    protected List<org.eclipse.lsp4j.CompletionItem> convertToLsp4j(List<com.q3lives.lsp.protocol.CompletionItem> items) {
         List<org.eclipse.lsp4j.CompletionItem> result = new ArrayList<>();
         for (com.q3lives.lsp.protocol.CompletionItem item : items) {
             // Directly add CompletionItem since it extends LSP4J CompletionItem

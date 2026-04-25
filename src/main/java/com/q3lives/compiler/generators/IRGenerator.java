@@ -299,6 +299,20 @@ public static class IRProgram {
         public List<IRInstruction> getInstructions() { return Collections.unmodifiableList(instructions); }
         public List<IRBasicBlock> getChildren() { return Collections.unmodifiableList(children); }
         public IRBasicBlock getParent() { return parent; }
+
+        /**
+         * 清空当前块的所有指令（供优化器使用）。
+         */
+        public void clearInstructions() {
+            instructions.clear();
+        }
+
+        /**
+         * 批量添加指令（供优化器使用）。
+         */
+        public void addInstructions(List<IRInstruction> newInstructions) {
+            instructions.addAll(newInstructions);
+        }
         
         /**
          * 获取所有指令（包括子块），自下至上展平
@@ -536,57 +550,66 @@ annotationResult	AnnotationResult	注解管理器的处理结果
         }
         
         // 第二步：根据块类型生成当前块的IR指令
-        switch (blockType.name()) {//TODO
-            case "function_block":
+        switch (blockType) {
+            case FUNCTION_BLOCK:
                 generateFunctionBlock(irBlock, codeBlock);
                 break;
-            case "parameter_block":
+            case PARAMETER_BLOCK:
                 generateParameterBlock(irBlock, codeBlock);
                 break;
-            case "return_block":
+            case RETURN_BLOCK:
                 generateReturnBlock(irBlock, codeBlock);
                 break;
-            case "control_flow_block":
+            case CONTROL_FLOW_BLOCK:
                 generateControlFlowBlock(irBlock, codeBlock);
                 break;
-            case "condition_block":
+            case CONDITION_BLOCK:
                 generateConditionBlock(irBlock, codeBlock);
                 break;
-            case "loop_body_block":
+            case LOOP_BODY_BLOCK:
                 generateLoopBodyBlock(irBlock, codeBlock);
                 break;
-            case "expression_block":
+            case EXPRESSION_BLOCK:
                 generateExpressionBlock(irBlock, codeBlock);
                 break;
-            case "function_call_block":
+            case FUNCTION_CALL_BLOCK:
                 generateFunctionCallBlock(irBlock, codeBlock);
                 break;
-            case "array_block":
+            case ARRAY_BLOCK:
                 generateArrayBlock(irBlock, codeBlock);
                 break;
-            case "variable_declaration_block":
+            case VARIABLE_DECLARATION_BLOCK:
                 generateVariableDeclarationBlock(irBlock, codeBlock);
                 break;
-            case "import_declaration_block":
+            case IMPORT_DECLARATION_BLOCK:
                 generateImportDeclarationBlock(irBlock, codeBlock);
                 break;
-            case "scope_block":
+            case SCOPE_BLOCK:
                 generateScopeBlock(irBlock, codeBlock);
                 break;
-            case "type_inner_block":
+            case TYPE_INNER_BLOCK:
                 generateTypeInnerBlock(irBlock, codeBlock);
                 break;
-            case "assignment_block":
+            case ASSIGNMENT_BLOCK:
                 generateAssignmentBlock(irBlock, codeBlock);
                 break;
-            case "type_definition_block":
+            case TYPE_DEFINITION_BLOCK:
                 generateTypeDefinitionBlock(irBlock, codeBlock);
                 break;
-            case "module_block":
+            case MODULE_BLOCK:
                 generateModuleBlock(irBlock, codeBlock);
                 break;
-            case "annotation_block":
+            case ANNOTATION_BLOCK:
                 generateAnnotationBlock(irBlock, codeBlock);
+                break;
+            case ASPECT_DEFINITION_BLOCK:
+                generateAspectDefinitionBlock(irBlock, codeBlock);
+                break;
+            case ADVICE_BLOCK:
+                generateAdviceBlock(irBlock, codeBlock);
+                break;
+            case ROOT_BLOCK:
+                // 根块只包含子块，已在递归处理中完成
                 break;
             default:
                 // 未知块类型，生成NOP
@@ -1215,7 +1238,45 @@ annotationResult	AnnotationResult	注解管理器的处理结果
             }
         }
     }
-    
+
+    /**
+     * 切面定义块处理器 - aspect_definition_block
+     */
+    private void generateAspectDefinitionBlock(IRBasicBlock irBlock, CodeBlock codeBlock) {
+        int line = codeBlock.getStartLine();
+        String aspectName = codeBlock.getAttribute("name");
+
+        irBlock.addInstruction(new IRInstruction(
+            OpCode.ASPECT_DEF, line, sourceFileName, aspectName
+        ));
+
+        // 记录切面信息到当前程序
+        currentProgram.addMetadata("aspect." + aspectName, codeBlock.getAttribute("pointcut"));
+    }
+
+    /**
+     * 通知块处理器 - advice_block
+     */
+    private void generateAdviceBlock(IRBasicBlock irBlock, CodeBlock codeBlock) {
+        int line = codeBlock.getStartLine();
+        String adviceType = codeBlock.getAttribute("advice_type");
+        String pointcut = codeBlock.getAttribute("pointcut");
+        String methodName = codeBlock.getAttribute("method_name");
+
+        OpCode adviceOpCode = switch (adviceType) {
+            case "before" -> OpCode.BEFORE_ADVICE;
+            case "after" -> OpCode.AFTER_ADVICE;
+            case "around" -> OpCode.AROUND_ADVICE;
+            default -> OpCode.NOP;
+        };
+
+        if (adviceOpCode != OpCode.NOP) {
+            irBlock.addInstruction(new IRInstruction(
+                adviceOpCode, line, sourceFileName, methodName, pointcut
+            ));
+        }
+    }
+
     // ==================== 异常流IR生成（思想1） ====================
     
     /**

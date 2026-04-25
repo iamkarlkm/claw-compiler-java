@@ -71,6 +71,35 @@ public class CompletionItem extends org.eclipse.lsp4j.CompletionItem {
     }
 
     /**
+     * 创建代码片段补全项
+     */
+    public static CompletionItem createSnippetCompletion(String label, String insertText, String description) {
+        CompletionItem item = new CompletionItem(
+            label,
+            org.eclipse.lsp4j.CompletionItemKind.Snippet,
+            label,
+            description,
+            insertText
+        );
+        item.setInsertTextFormat(org.eclipse.lsp4j.InsertTextFormat.Snippet);
+        return item;
+    }
+
+    /**
+     * 创建方法补全项
+     */
+    public static CompletionItem createMethodCompletion(String methodName, String returnType, String description) {
+        String detail = String.format("method () -> %s", returnType);
+        return new CompletionItem(
+            methodName,
+            org.eclipse.lsp4j.CompletionItemKind.Method,
+            detail,
+            description,
+            String.format("%s()", methodName)
+        );
+    }
+
+    /**
      * 获取类型对应的 CompletionItemKind
      */
     private static org.eclipse.lsp4j.CompletionItemKind getCompletionItemKind(String typeName) {

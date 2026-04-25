@@ -68,6 +68,9 @@ public class EnhancedDiagnosticProvider extends DiagnosticProvider {
 
             List<Diagnostic> diagnostics = new ArrayList<>();
 
+            // 0. 编译器错误（最高优先级）
+            diagnostics.addAll(getCompilationErrors(document.getUri()));
+
             // 1. 基础语法检查
             diagnostics.addAll(checkSyntaxEnhanced(document));
 
@@ -515,5 +518,67 @@ public class EnhancedDiagnosticProvider extends DiagnosticProvider {
         // Aspect 应该在其他注解之前
         return !line.contains("@Before") && !line.contains("@After") && !line.contains("@Around")
             || !line.contains("@Aspect");
+    }
+
+    // ==================== 编译错误管理 ====================
+
+    // 编译错误缓存：URI -> 错误列表
+    private final Map<String, List<String>> compilationErrors = new HashMap<>();
+
+    /**
+     * 设置指定文档的编译错误
+     */
+    public void setCompilationErrors(String uri, List<String> errors) {
+        if (errors == null || errors.isEmpty()) {
+            compilationErrors.remove(uri);
+        } else {
+            compilationErrors.put(uri, new ArrayList<>(errors));
+        }
+        // 清除诊断缓存，确保下次 diagnose 会包含新的编译错误
+        diagnosticCache.clear();
+    }
+
+    /**
+     * 清除指定文档的编译错误
+     */
+    public void clearCompilationErrors(String uri) {
+        compilationErrors.remove(uri);
+        diagnosticCache.clear();
+    }
+
+    /**
+     * 将编译错误字符串转换为 Diagnostic 对象
+     */
+    private List<Diagnostic> getCompilationErrors(String uri) {
+        List<String> errors = compilationErrors.get(uri);
+        if (errors == null || errors.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Diagnostic> diagnostics = new ArrayList<>();
+        for (String error : errors) {
+            // 尝试从错误信息中解析行号（格式："... 在第 X 行" 或 "line X"）
+            int line = 0;
+            int column = 0;
+
+            java.util.regex.Pattern linePattern = java.util.regex.Pattern.compile(
+                "(?:第|line|Line|at)\\s*(\\d+)");
+            java.util.regex.Matcher matcher = linePattern.matcher(error);
+            if (matcher.find()) {
+                try {
+                    line = Integer.parseInt(matcher.group(1)) - 1; // LSP 行号从 0 开始
+                    if (line < 0) line = 0;
+                } catch (NumberFormatException ignored) {
+                }
+            }
+
+            Range range = new Range(
+                new Position(line, column),
+                new Position(line, column + error.length())
+            );
+            Diagnostic diagnostic = new Diagnostic(range, error, DiagnosticSeverity.Error, "claw-compiler");
+            diagnostics.add(diagnostic);
+        }
+        return diagnostics;
     }
 }
