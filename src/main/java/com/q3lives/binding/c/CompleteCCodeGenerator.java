@@ -907,6 +907,47 @@ public class CompleteCCodeGenerator implements TargetCodeGenerator {
                 String cType = mapCType(targetType);
                 return result + " = (" + cType + ")__temp;  // type cast to " + targetType;
             }
+            // AOP (Aspect-Oriented Programming)
+            case ASPECT_DEF: {
+                String aspectName = ops.get(0).toString();
+                return runtime.generateAspectDefinition(aspectName);
+            }
+            case BEFORE_ADVICE: {
+                String methodName = ops.get(0).toString();
+                String pointcut = ops.size() > 1 ? ops.get(1).toString() : "";
+                return runtime.generateBeforeAdvice("before_" + methodName, pointcut);
+            }
+            case AFTER_ADVICE: {
+                String methodName = ops.get(0).toString();
+                String pointcut = ops.size() > 1 ? ops.get(1).toString() : "";
+                return runtime.generateAfterAdvice("after_" + methodName, pointcut);
+            }
+            case AROUND_ADVICE: {
+                String methodName = ops.get(0).toString();
+                String pointcut = ops.size() > 1 ? ops.get(1).toString() : "";
+                return runtime.generateAroundAdvice("around_" + methodName, pointcut);
+            }
+            case JOIN_POINT_CREATE: {
+                String joinPointName = ops.get(0).toString();
+                String methodName = ops.size() > 1 ? ops.get(1).toString() : "";
+                String args = ops.size() > 2 ? ops.get(2).toString() : "NULL";
+                return runtime.generateJoinPointCreate(joinPointName, methodName, args);
+            }
+            case ADVICE_PROCEED: {
+                String joinPointName = ops.isEmpty() ? "jp" : ops.get(0).toString();
+                return "__temp = " + runtime.generateAdviceProceed(joinPointName) + ";";
+            }
+            case METHOD_INVOCATION: {
+                String methodName = ops.get(0).toString();
+                StringBuilder call = new StringBuilder();
+                call.append(methodName).append("(");
+                for (int i = 1; i < ops.size(); i++) {
+                    if (i > 1) call.append(", ");
+                    call.append(ops.get(i));
+                }
+                call.append(");");
+                return "__temp = " + call.toString();
+            }
             default:
                 return "// " + op.name() + ": " + ops.stream().map(Object::toString).collect(Collectors.joining(", "));
         }

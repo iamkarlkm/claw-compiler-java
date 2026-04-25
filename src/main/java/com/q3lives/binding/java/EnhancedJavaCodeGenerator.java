@@ -301,11 +301,17 @@ public class EnhancedJavaCodeGenerator implements TargetCodeGenerator {
         // 生成类方法
         generateClassMethods(block);
 
+        // 生成 AOP 通知方法
+        generateAOPMethods(block);
+
         // 生成主方法
         generateMainMethod();
 
         indentLevel--;
         appendLine("}");
+
+        // 在类定义外部生成独立的 AOP Aspect 类
+        generateAspectClasses(block);
     }
 
     /**
@@ -451,6 +457,90 @@ public class EnhancedJavaCodeGenerator implements TargetCodeGenerator {
         appendLine("");
 
         methodCount++;
+    }
+
+    /**
+     * 生成 AOP 通知方法（内联在目标类中）
+     */
+    private void generateAOPMethods(IRBasicBlock block) {
+        List<AOPMethodInfo> aopMethods = new ArrayList<>();
+
+        for (IRInstruction inst : block.getInstructions()) {
+            switch (inst.getOpCode()) {
+                case BEFORE_ADVICE: {
+                    List<Object> ops = inst.getOperands();
+                    String methodName = ops.get(0).toString();
+                    String pointcut = ops.size() > 1 ? ops.get(1).toString() : "";
+                    aopMethods.add(new AOPMethodInfo("before_" + methodName, pointcut, "before"));
+                    break;
+                }
+                case AFTER_ADVICE: {
+                    List<Object> ops = inst.getOperands();
+                    String methodName = ops.get(0).toString();
+                    String pointcut = ops.size() > 1 ? ops.get(1).toString() : "";
+                    aopMethods.add(new AOPMethodInfo("after_" + methodName, pointcut, "after"));
+                    break;
+                }
+                case AROUND_ADVICE: {
+                    List<Object> ops = inst.getOperands();
+                    String methodName = ops.get(0).toString();
+                    String pointcut = ops.size() > 1 ? ops.get(1).toString() : "";
+                    aopMethods.add(new AOPMethodInfo("around_" + methodName, pointcut, "around"));
+                    break;
+                }
+                default:
+                    break;
+            }
+        }
+
+        for (AOPMethodInfo aop : aopMethods) {
+            generateAOPMethod(aop);
+        }
+    }
+
+    private void generateAOPMethod(AOPMethodInfo aop) {
+        switch (aop.adviceType) {
+            case "before":
+                appendLine(runtime.generateBeforeAdvice(aop.name, aop.pointcut));
+                break;
+            case "after":
+                appendLine(runtime.generateAfterAdvice(aop.name, aop.pointcut));
+                break;
+            case "around":
+                appendLine(runtime.generateAroundAdvice(aop.name, aop.pointcut));
+                break;
+        }
+        appendLine("");
+        methodCount++;
+    }
+
+    /**
+     * 在类定义外部生成独立的 AOP Aspect 类
+     */
+    private void generateAspectClasses(IRBasicBlock block) {
+        for (IRInstruction inst : block.getInstructions()) {
+            if (inst.getOpCode() == OpCode.ASPECT_DEF) {
+                List<Object> ops = inst.getOperands();
+                String aspectName = ops.get(0).toString();
+                appendLine(runtime.generateAspectDefinition(aspectName));
+                appendLine("");
+            }
+        }
+    }
+
+    /**
+     * AOP 方法信息（内部辅助类）
+     */
+    private static class AOPMethodInfo {
+        final String name;
+        final String pointcut;
+        final String adviceType;
+
+        AOPMethodInfo(String name, String pointcut, String adviceType) {
+            this.name = name;
+            this.pointcut = pointcut;
+            this.adviceType = adviceType;
+        }
     }
 
     /**

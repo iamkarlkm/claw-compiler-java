@@ -787,4 +787,105 @@ public class PythonRuntime implements TargetRuntime {
         }
         return sb.toString();
     }
+
+    // ================================================================
+    //  AOP (Aspect-Oriented Programming) 支持
+    // ================================================================
+
+    /**
+     * 生成切面类定义（Python 使用装饰器模式实现 AOP）
+     */
+    public String generateAspectDefinition(String aspectName) {
+        return "class " + aspectName + ":\n" +
+               "    \"\"\"AOP Aspect: " + aspectName + "\"\"\"\n" +
+               "    pass";
+    }
+
+    /**
+     * 生成 before 通知装饰器
+     */
+    public String generateBeforeAdvice(String adviceName, String targetName) {
+        return "def " + adviceName + "(join_point):\n" +
+               "    \"\"\"Before advice for " + targetName + "\"\"\"\n" +
+               "    print(f\"[BEFORE] {join_point.method_name}\")";
+    }
+
+    /**
+     * 生成 after 通知装饰器
+     */
+    public String generateAfterAdvice(String adviceName, String targetName) {
+        return "def " + adviceName + "(join_point):\n" +
+               "    \"\"\"After advice for " + targetName + "\"\"\"\n" +
+               "    print(f\"[AFTER] {join_point.method_name}\")";
+    }
+
+    /**
+     * 生成 around 通知装饰器
+     */
+    public String generateAroundAdvice(String adviceName, String targetName) {
+        return "def " + adviceName + "(proceed, join_point):\n" +
+               "    \"\"\"Around advice for " + targetName + "\"\"\"\n" +
+               "    print(f\"[BEGIN AROUND] {join_point.method_name}\")\n" +
+               "    result = proceed()\n" +
+               "    print(f\"[END AROUND] {join_point.method_name}\")\n" +
+               "    return result";
+    }
+
+    /**
+     * 生成 JoinPoint 类定义
+     */
+    public String generateJoinPointSupport() {
+        return "# ============================================\n" +
+               "# AOP Support for Python\n" +
+               "# ============================================\n\n" +
+               "class JoinPoint:\n" +
+               "    \"\"\"连接点，封装方法调用上下文\"\"\"\n\n" +
+               "    def __init__(self, method_name: str, args: tuple = (), target = None):\n" +
+               "        self.method_name = method_name\n" +
+               "        self.args = args\n" +
+               "        self.target = target\n" +
+               "        self._proceed_fn = None\n\n" +
+               "    def proceed(self):\n" +
+               "        \"\"\"执行原始方法\"\"\"\n" +
+               "        if self._proceed_fn:\n" +
+               "            return self._proceed_fn(*self.args)\n" +
+               "        return None\n\n" +
+               "    def get_method_name(self) -> str:\n" +
+               "        return self.method_name\n\n" +
+               "    def get_args(self) -> tuple:\n" +
+               "        return self.args\n\n" +
+               "    def get_target(self):\n" +
+               "        return self.target\n\n" +
+               "class ProceedingJoinPoint(JoinPoint):\n" +
+               "    \"\"\"可执行的连接点（用于 around 通知）\"\"\"\n" +
+               "    pass\n\n" +
+               "def apply_advice(target_func, before=None, after=None, around=None):\n" +
+               "    \"\"\"将通知应用到目标函数\"\"\"\n" +
+               "    def wrapper(*args, **kwargs):\n" +
+               "        jp = JoinPoint(target_func.__name__, args)\n" +
+               "        if before:\n" +
+               "            before(jp)\n" +
+               "        if around:\n" +
+               "            result = around(lambda: target_func(*args, **kwargs), jp)\n" +
+               "        else:\n" +
+               "            result = target_func(*args, **kwargs)\n" +
+               "        if after:\n" +
+               "            after(jp)\n" +
+               "        return result\n" +
+               "    return wrapper";
+    }
+
+    /**
+     * 生成 JoinPoint 创建语句
+     */
+    public String generateJoinPointCreate(String joinPointName, String methodName, String args) {
+        return joinPointName + " = JoinPoint(\"" + methodName + "\", " + args + ")";
+    }
+
+    /**
+     * 生成 advice proceed 调用
+     */
+    public String generateAdviceProceed(String joinPointName) {
+        return joinPointName + ".proceed()";
+    }
 }

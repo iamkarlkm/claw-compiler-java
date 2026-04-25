@@ -422,6 +422,42 @@ public class EnhancedPythonCodeGenerator implements TargetCodeGenerator {
                 break;
             }
 
+            // ====== AOP (Aspect-Oriented Programming) ======
+            case ASPECT_DEF: {
+                generateAspectDef(inst);
+                break;
+            }
+
+            case BEFORE_ADVICE: {
+                generateBeforeAdvice(inst);
+                break;
+            }
+
+            case AFTER_ADVICE: {
+                generateAfterAdvice(inst);
+                break;
+            }
+
+            case AROUND_ADVICE: {
+                generateAroundAdvice(inst);
+                break;
+            }
+
+            case JOIN_POINT_CREATE: {
+                generateJoinPointCreate(inst);
+                break;
+            }
+
+            case ADVICE_PROCEED: {
+                generateAdviceProceed(inst);
+                break;
+            }
+
+            case METHOD_INVOCATION: {
+                generateMethodInvocation(inst);
+                break;
+            }
+
             // ====== NOP ======
             case NOP: {
                 generateNop(inst);
@@ -962,6 +998,65 @@ public class EnhancedPythonCodeGenerator implements TargetCodeGenerator {
         } else {
             appendLine("pass");
         }
+    }
+
+    // ========== AOP 辅助方法 ==========
+
+    private void generateAspectDef(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
+        String aspectName = ops.get(0).toString();
+        appendLine(runtime.generateAspectDefinition(aspectName));
+    }
+
+    private void generateBeforeAdvice(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
+        String methodName = ops.get(0).toString();
+        String pointcut = ops.size() > 1 ? ops.get(1).toString() : "";
+        String adviceName = "before_" + methodName;
+        appendLine(runtime.generateBeforeAdvice(adviceName, pointcut));
+    }
+
+    private void generateAfterAdvice(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
+        String methodName = ops.get(0).toString();
+        String pointcut = ops.size() > 1 ? ops.get(1).toString() : "";
+        String adviceName = "after_" + methodName;
+        appendLine(runtime.generateAfterAdvice(adviceName, pointcut));
+    }
+
+    private void generateAroundAdvice(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
+        String methodName = ops.get(0).toString();
+        String pointcut = ops.size() > 1 ? ops.get(1).toString() : "";
+        String adviceName = "around_" + methodName;
+        appendLine(runtime.generateAroundAdvice(adviceName, pointcut));
+    }
+
+    private void generateJoinPointCreate(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
+        String joinPointName = ops.get(0).toString();
+        String methodName = ops.size() > 1 ? ops.get(1).toString() : "";
+        String args = ops.size() > 2 ? ops.get(2).toString() : "()";
+        appendLine(runtime.generateJoinPointCreate(joinPointName, methodName, args));
+    }
+
+    private void generateAdviceProceed(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
+        String joinPointName = ops.isEmpty() ? "jp" : ops.get(0).toString();
+        appendLine("__stack_top = " + runtime.generateAdviceProceed(joinPointName));
+    }
+
+    private void generateMethodInvocation(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
+        String methodName = ops.get(0).toString();
+        StringBuilder call = new StringBuilder();
+        call.append(methodName).append("(");
+        for (int i = 1; i < ops.size(); i++) {
+            if (i > 1) call.append(", ");
+            call.append(ops.get(i));
+        }
+        call.append(")");
+        appendLine("__stack_top = " + call.toString());
     }
 
     // ========== 辅助方法 ==========

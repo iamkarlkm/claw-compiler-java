@@ -872,6 +872,13 @@ public class JavaRuntime implements TargetRuntime {
         sb.append("            throw new RuntimeException(\"Method not found: \" + methodName, e);\n");
         sb.append("        }\n");
         sb.append("    }\n");
+        sb.append("}\n\n");
+
+        // ProceedingJoinPoint 类（继承自 JoinPoint，用于 Around 通知）
+        sb.append("public class ProceedingJoinPoint extends JoinPoint {\n");
+        sb.append("    public ProceedingJoinPoint(String methodName, Object[] args, Object target, Object instance) {\n");
+        sb.append("        super(methodName, args, target, instance);\n");
+        sb.append("    }\n");
         sb.append("}\n");
 
         return sb.toString();

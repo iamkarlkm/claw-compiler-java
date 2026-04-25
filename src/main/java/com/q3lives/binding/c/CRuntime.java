@@ -877,4 +877,105 @@ public List<String> generateImport () {
         sb.append("#endif /* ").append(guard).append(" */");
         return sb.toString();
     }
+
+    // ================================================================
+    //  AOP (Aspect-Oriented Programming) 支持
+    // ================================================================
+
+    /**
+     * 生成切面结构体定义（C 使用函数指针回调实现 AOP）
+     */
+    public String generateAspectDefinition(String aspectName) {
+        return "/* AOP Aspect: " + aspectName + " */\n" +
+               "typedef struct {\n" +
+               "    const char* aspect_name;\n" +
+               "    void (*before)(JoinPoint*);\n" +
+               "    void (*after)(JoinPoint*);\n" +
+               "    void* (*around)(ProceedingJoinPoint*);\n" +
+               "} " + aspectName + ";";
+    }
+
+    /**
+     * 生成 before 通知函数原型
+     */
+    public String generateBeforeAdvice(String adviceName, String targetName) {
+        return "/* Before advice for " + targetName + " */\n" +
+               "void " + adviceName + "(JoinPoint* jp) {\n" +
+               "    printf(\"[BEFORE] %s\\n\", jp->method_name);\n" +
+               "}";
+    }
+
+    /**
+     * 生成 after 通知函数原型
+     */
+    public String generateAfterAdvice(String adviceName, String targetName) {
+        return "/* After advice for " + targetName + " */\n" +
+               "void " + adviceName + "(JoinPoint* jp) {\n" +
+               "    printf(\"[AFTER] %s\\n\", jp->method_name);\n" +
+               "}";
+    }
+
+    /**
+     * 生成 around 通知函数原型
+     */
+    public String generateAroundAdvice(String adviceName, String targetName) {
+        return "/* Around advice for " + targetName + " */\n" +
+               "void* " + adviceName + "(ProceedingJoinPoint* jp) {\n" +
+               "    printf(\"[BEGIN AROUND] %s\\n\", jp->method_name);\n" +
+               "    void* result = jp->proceed(jp);\n" +
+               "    printf(\"[END AROUND] %s\\n\", jp->method_name);\n" +
+               "    return result;\n" +
+               "}";
+    }
+
+    /**
+     * 生成 JoinPoint 结构体定义和相关辅助函数
+     */
+    public String generateJoinPointSupport() {
+        return "/* ============================================ */\n" +
+               "/* AOP Support for C                          */\n" +
+               "/* ============================================ */\n\n" +
+               "/* 连接点结构体 */\n" +
+               "typedef struct {\n" +
+               "    const char* method_name;\n" +
+               "    void** args;\n" +
+               "    int arg_count;\n" +
+               "    void* target;\n" +
+               "    void* (*proceed)(struct _ProceedingJoinPoint*);\n" +
+               "} JoinPoint;\n\n" +
+               "typedef struct _ProceedingJoinPoint {\n" +
+               "    JoinPoint base;\n" +
+               "    void* (*proceed)(struct _ProceedingJoinPoint*);\n" +
+               "} ProceedingJoinPoint;\n\n" +
+               "/* 创建 JoinPoint */\n" +
+               "static JoinPoint* join_point_create(const char* method_name, void** args, int arg_count, void* target) {\n" +
+               "    JoinPoint* jp = (JoinPoint*)malloc(sizeof(JoinPoint));\n" +
+               "    if (jp) {\n" +
+               "        jp->method_name = method_name;\n" +
+               "        jp->args = args;\n" +
+               "        jp->arg_count = arg_count;\n" +
+               "        jp->target = target;\n" +
+               "        jp->proceed = NULL;\n" +
+               "    }\n" +
+               "    return jp;\n" +
+               "}\n\n" +
+               "/* 释放 JoinPoint */\n" +
+               "static void join_point_free(JoinPoint* jp) {\n" +
+               "    if (jp) free(jp);\n" +
+               "}\n";
+    }
+
+    /**
+     * 生成 JoinPoint 创建语句
+     */
+    public String generateJoinPointCreate(String joinPointName, String methodName, String args) {
+        return joinPointName + " = join_point_create(\"" + methodName + "\", " + args + ", 0, NULL);";
+    }
+
+    /**
+     * 生成 advice proceed 调用
+     */
+    public String generateAdviceProceed(String joinPointName) {
+        return joinPointName + "->proceed(" + joinPointName + ")";
+    }
 }
