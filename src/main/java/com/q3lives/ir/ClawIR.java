@@ -40,7 +40,7 @@ public class ClawIR {
 
     /** 兼容旧代码的无参构造（测试用） */
     public ClawIR() {
-        this.irProgram = null;
+        this.irProgram = new IRGenerator.IRProgram("test");
         this.structureContext = null;
         this.semanticContext = null;
         this.annotationResult = null;

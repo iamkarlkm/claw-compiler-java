@@ -28,10 +28,10 @@ public class FFIBindingTable {
     private final Map<String, ExternFunction> globalFunctions = new LinkedHashMap<>();
     private final Map<String, ExternType> globalTypes = new LinkedHashMap<>();
     private final Map<String, ExternConstant> globalConstants = new LinkedHashMap<>();
-    private final Map<String, ExternStruct> globalStructs = new LinkedHashMap<>(); // NEW
-    private final Map<String, ExternEnum> globalEnums = new LinkedHashMap<>(); // NEW
-    private final Map<String, ExternCallback> globalCallbacks = new LinkedHashMap<>(); // NEW
-    private final Map<String, ExternMacro> globalMacros = new LinkedHashMap<>(); // NEW
+    private final List<ExternStruct> globalStructs = new ArrayList<>(); // NEW
+    private final List<ExternEnum> globalEnums = new ArrayList<>(); // NEW
+    private final List<ExternCallback> globalCallbacks = new ArrayList<>(); // NEW
+    private final List<ExternMacro> globalMacros = new ArrayList<>(); // NEW
     private final List<LinkDirective> globalLinks = new ArrayList<>();
     private final List<String> globalIncludes = new ArrayList<>();
 
@@ -52,19 +52,19 @@ public class FFIBindingTable {
     }
 
     public List<FFIBindingTable.ExternStruct> getAllStructs() {
-        return new ArrayList<>(globalStructs.values());
+        return globalStructs;
     }
 
     public List<FFIBindingTable.ExternEnum> getAllEnums() {
-        return new ArrayList<>(globalEnums.values());
+        return globalEnums;
     }
 
     public List<FFIBindingTable.ExternCallback> getAllCallbacks() {
-        return new ArrayList<>(globalCallbacks.values());
+        return globalCallbacks;
     }
 
     public List<FFIBindingTable.ExternMacro> getAllMacros() {
-        return new ArrayList<>(globalMacros.values());
+        return globalMacros;
     }
 
     public List<LinkDirective> getAllLinks() {
@@ -82,12 +82,15 @@ public class FFIBindingTable {
         if (typeName == null) return null;
         ExternType type = globalTypes.get(typeName);
         if (type != null) return type;
-        ExternStruct struct = globalStructs.get(typeName);
-        if (struct != null) return struct;
-        ExternEnum enumType = globalEnums.get(typeName);
-        if (enumType != null) return enumType;
-        ExternCallback callback = globalCallbacks.get(typeName);
-        if (callback != null) return callback;
+        for (ExternStruct struct : globalStructs) {
+            if (typeName.equals(struct.name)) return struct;
+        }
+        for (ExternEnum enumType : globalEnums) {
+            if (typeName.equals(enumType.name)) return enumType;
+        }
+        for (ExternCallback callback : globalCallbacks) {
+            if (typeName.equals(callback.name)) return callback;
+        }
         return null;
     }
 
@@ -103,12 +106,21 @@ public class FFIBindingTable {
 
     public boolean isExternSymbol(String name) {
         if (name == null) return false;
-        return globalFunctions.containsKey(name)
+        if (globalFunctions.containsKey(name)
             || globalConstants.containsKey(name)
-            || globalTypes.containsKey(name)
-            || globalStructs.containsKey(name)
-            || globalEnums.containsKey(name)
-            || globalCallbacks.containsKey(name);
+            || globalTypes.containsKey(name)) {
+            return true;
+        }
+        for (ExternStruct s : globalStructs) {
+            if (name.equals(s.name)) return true;
+        }
+        for (ExternEnum e : globalEnums) {
+            if (name.equals(e.name)) return true;
+        }
+        for (ExternCallback c : globalCallbacks) {
+            if (name.equals(c.name)) return true;
+        }
+        return false;
     }
 
     public ExternFunction findFunction(String name) {
@@ -694,7 +706,7 @@ public class FFIBindingTable {
      * 获取所有 ExternBlock
      */
     public List<ExternBlock> getExternBlocks() {
-        return new ArrayList<>(externBlocks);
+        return externBlocks;
     }
 
     /**
@@ -727,23 +739,23 @@ public class FFIBindingTable {
             }
         }
         for (ExternStruct struct : block.structs) {
-            if (!globalStructs.containsKey(struct.name)) {
-                globalStructs.put(struct.name, struct);
+            if (globalStructs.stream().noneMatch(s -> s.name.equals(struct.name))) {
+                globalStructs.add(struct);
             }
         }
         for (ExternEnum enumType : block.enums) {
-            if (!globalEnums.containsKey(enumType.name)) {
-                globalEnums.put(enumType.name, enumType);
+            if (globalEnums.stream().noneMatch(e -> e.name.equals(enumType.name))) {
+                globalEnums.add(enumType);
             }
         }
         for (ExternCallback callback : block.callbacks) {
-            if (!globalCallbacks.containsKey(callback.name)) {
-                globalCallbacks.put(callback.name, callback);
+            if (globalCallbacks.stream().noneMatch(c -> c.name.equals(callback.name))) {
+                globalCallbacks.add(callback);
             }
         }
         for (ExternMacro macro : block.macros) {
-            if (!globalMacros.containsKey(macro.name)) {
-                globalMacros.put(macro.name, macro);
+            if (globalMacros.stream().noneMatch(m -> m.name.equals(macro.name))) {
+                globalMacros.add(macro);
             }
         }
         for (LinkDirective link : block.links) {

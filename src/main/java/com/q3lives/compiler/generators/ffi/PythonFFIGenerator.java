@@ -208,7 +208,8 @@ public class PythonFFIGenerator {
                 break;
             }
         }
-        if ("String".equals(func.returnType) || "CString".equals(func.returnType)) {
+        if ("String".equals(func.returnType) || "CString".equals(func.returnType)
+            || "Void".equals(func.returnType)) {
             needsWrapper = true;
         }
 
