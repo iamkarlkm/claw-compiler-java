@@ -1,0 +1,17 @@
+# Build artifacts
+target/
+*.class
+*.jar
+
+# Backup directories for broken files pending fix
+src/broken-lsp-backup/
+src/broken-test-backup/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
