@@ -13,6 +13,8 @@ import com.q3lives.compiler.generators.IRGenerator.IRBasicBlock;
 import com.q3lives.compiler.generators.IRGenerator.IRInstruction;
 import com.q3lives.compiler.generators.IRGenerator.OpCode;
 import com.q3lives.compiler.generators.IRGenerator.IRProgram;
+import com.q3lives.compiler.generators.ffi.FFIBindingTable;
+import com.q3lives.compiler.generators.ffi.JavaFFIGenerator;
 import com.q3lives.ir.ClawIR;
 
 /**
@@ -160,6 +162,20 @@ public class EnhancedJavaCodeGenerator implements TargetCodeGenerator {
     public GenerationResult generate(ClawIR ir, GenerationConfig config) {
         GenerationResult result = new GenerationResult();
 
+        // 如果包含 FFI 绑定，先生成 FFI 代码（独立于主代码生成）
+        if (ir != null && ir.hasFFIBindings()) {
+            try {
+                FFIBindingTable ffiTable = ir.getFfiBindingTable();
+                JavaFFIGenerator ffiGenerator = new JavaFFIGenerator(ffiTable);
+                String ffiCode = ffiGenerator.generateAll();
+                if (!ffiCode.isEmpty()) {
+                    result.addFile("ClawFFIBindings.java", ffiCode);
+                }
+            } catch (Exception e) {
+                result.addError("FFI 代码生成错误: " + e.getMessage());
+            }
+        }
+
         try {
             // 生成主代码
             String mainCode = generate(ir);
@@ -254,7 +270,7 @@ public class EnhancedJavaCodeGenerator implements TargetCodeGenerator {
         // 查找 TYPE_DEF 指令
         for (IRInstruction inst : block.getInstructions()) {
             if (inst.getOpCode() == OpCode.TYPE_DEF) {
-                generateClass(inst);
+                generateClass(inst, block);
                 return;
             }
         }
@@ -266,7 +282,7 @@ public class EnhancedJavaCodeGenerator implements TargetCodeGenerator {
     /**
      * 生成具体的类
      */
-    private void generateClass(IRInstruction typeDefInst) {
+    private void generateClass(IRInstruction typeDefInst, IRBasicBlock block) {
         List<Object> ops = typeDefInst.getOperands();
         String className = ops.get(0).toString();
 

@@ -155,7 +155,7 @@ public class Tokenizer {
                 String stringValue = sb.toString();
                 // 验证字符串是否完整
                 if (stringValue.charAt(stringValue.length() - 1) != quote) {
-                    tokens.add(new Token(TokenType.ERROR, "未闭合的字符串", line, start,
+                    tokens.add(new Token(TokenType.UNKNOWN, "未闭合的字符串", line, start,
                                         lineInfo.getStartOffset() + start));
                 } else {
                     tokens.add(new Token(TokenType.LIT_STRING, stringValue, line, start,
@@ -216,27 +216,30 @@ public class Tokenizer {
     }
 
     // 运算符匹配预编译表（优化性能）
-    private static final Map<Character, TokenType> SINGLE_CHAR_OPS = Map.of(
-        '+', TokenType.OP_PLUS,
-        '-', TokenType.OP_MINUS,
-        '*', TokenType.OP_STAR,
-        '/', TokenType.OP_SLASH,
-        '%', TokenType.OP_PERCENT,
-        '=', TokenType.OP_ASSIGN,
-        '<', TokenType.OP_LESS,
-        '>', TokenType.OP_GREATER,
-        '!', TokenType.OP_NOT,
-        '.', TokenType.OP_DOT,
-        ':', TokenType.OP_COLON,
-        ',', TokenType.OP_COMMA,
-        ';', TokenType.OP_SEMICOLON,
-        '{', TokenType.OPEN_BRACE,
-        '}', TokenType.CLOSE_BRACE,
-        '(', TokenType.OPEN_PAREN,
-        ')', TokenType.CLOSE_PAREN,
-        '[', TokenType.OPEN_BRACKET,
-        ']', TokenType.CLOSE_BRACKET
-    );
+    private static final Map<Character, TokenType> SINGLE_CHAR_OPS;
+    static {
+        Map<Character, TokenType> map = new HashMap<>();
+        map.put('+', TokenType.OP_PLUS);
+        map.put('-', TokenType.OP_MINUS);
+        map.put('*', TokenType.OP_STAR);
+        map.put('/', TokenType.OP_SLASH);
+        map.put('%', TokenType.OP_PERCENT);
+        map.put('=', TokenType.OP_ASSIGN);
+        map.put('<', TokenType.OP_LESS);
+        map.put('>', TokenType.OP_GREATER);
+        map.put('!', TokenType.OP_NOT);
+        map.put('.', TokenType.OP_DOT);
+        map.put(':', TokenType.OP_COLON);
+        map.put(',', TokenType.OP_COMMA);
+        map.put(';', TokenType.OP_SEMICOLON);
+        map.put('{', TokenType.OPEN_BRACE);
+        map.put('}', TokenType.CLOSE_BRACE);
+        map.put('(', TokenType.OPEN_PAREN);
+        map.put(')', TokenType.CLOSE_PAREN);
+        map.put('[', TokenType.OPEN_BRACKET);
+        map.put(']', TokenType.CLOSE_BRACKET);
+        SINGLE_CHAR_OPS = Collections.unmodifiableMap(map);
+    }
 
     private static final Map<Character, Map<Character, TokenType>> DOUBLE_CHAR_OPS = Map.of(
         '-', Map.of('>', TokenType.OP_ARROW),

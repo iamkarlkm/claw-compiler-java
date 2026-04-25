@@ -1,6 +1,7 @@
 package com.q3lives.compiler.pipeline;
 
-import com.q3lives.compiler.core.CompilerConstants;
+import com.q3lives.compiler.common.CompilerConstants;
+import com.q3lives.compiler.performance.PerformanceMonitor;
 import com.q3lives.compiler.pipeline.GeneratedCode;
 import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
@@ -68,7 +69,7 @@ public class EfficientCompiler {
 
         // 1. 尝试从缓存获取
         if (incrementalEnabled) {
-            CachedCompilationResult cached = cacheManager.get(fileName);
+            IncrementalCompiler.CachedCompilationResult cached = cacheManager.get(fileName);
             if (cached != null) {
                 log.debug("使用缓存结果: {}", fileName);
                 return createCompilationResult(cached);
@@ -85,7 +86,7 @@ public class EfficientCompiler {
             result = fullPipeline.compile(source, fileName);
         }
 
-        timer.endTimer();
+        monitor.endTimer(timer);
 
         // 3. 缓存结果
         if (incrementalEnabled && result.isSuccess()) {
@@ -148,7 +149,7 @@ public class EfficientCompiler {
 
         // 2. 并行编译独立文件
         if (parallelEnabled && !independentFiles.isEmpty()) {
-            compileInParallel(independentFiles, sourceFiles, result);
+            compileInParallel(independentFiles, sourceFiles, changedFiles, result);
         } else {
             // 顺序编译
             for (String file : independentFiles) {
@@ -205,6 +206,7 @@ public class EfficientCompiler {
      */
     private void compileInParallel(Set<String> files,
                                   Map<String, String> sourceFiles,
+                                  Set<String> changedFiles,
                                   ProjectCompilationResult result) {
 
         ExecutorService executor = Executors.newFixedThreadPool(
@@ -263,7 +265,7 @@ public class EfficientCompiler {
             files.size(), files.size(), 0, new HashMap<>());
 
         for (String file : files) {
-            CachedCompilationResult cached = cacheManager.get(file);
+            IncrementalCompiler.CachedCompilationResult cached = cacheManager.get(file);
             if (cached != null) {
                 result.addSuccess(file, createCompilationResult(cached));
             } else {
@@ -285,7 +287,7 @@ public class EfficientCompiler {
         // 更新文件的依赖关系缓存
         for (Map.Entry<String, CompilationResult> entry : result.getResults().entrySet()) {
             String file = entry.getKey();
-            if (entry.getValue().getSuccess()) {
+            if (entry.getValue().isSuccess()) {
                 // 获取该文件的所有依赖
                 Set<String> dependencies = dependencyResult.dependencyGraph()
                     .getOrDefault(file, Collections.emptySet());
@@ -299,22 +301,18 @@ public class EfficientCompiler {
     /**
      * 创建编译结果
      */
-    private CompilationResult createCompilationResult(CachedCompilationResult cached) {
-        return new CompilationResult(
-            cached.success(),
-            cached.generatedCode(),
-            cached.elapsedTime()
-        );
+    private CompilationResult createCompilationResult(IncrementalCompiler.CachedCompilationResult cached) {
+        return CompilationResult.success(cached.generatedCode(), cached.elapsedTime());
     }
 
     /**
      * 创建缓存结果
      */
-    private CachedCompilationResult createCachedResult(CompilationResult result) {
-        return new CachedCompilationResult(
-            result.getSuccess(),
+    private IncrementalCompiler.CachedCompilationResult createCachedResult(CompilationResult result) {
+        return new IncrementalCompiler.CachedCompilationResult(
+            result.isSuccess(),
             result.getGeneratedCode(),
-            result.getElapsedTime()
+            result.getElapsedMillis()
         );
     }
 
@@ -333,7 +331,7 @@ public class EfficientCompiler {
      * 获取编译统计信息
      */
     public CompilationStatistics getStatistics() {
-        CacheStatistics cacheStats = cacheManager.getStatistics();
+        CompilationCacheManager.CacheStatistics cacheStats = cacheManager.getStatistics();
         return new CompilationStatistics(
             cacheStats.totalEntries(),
             cacheStats.totalSize(),
@@ -349,6 +347,7 @@ public class EfficientCompiler {
         private final int totalFiles;
         private final int successCount;
         private final int failureCount;
+        private int skippedCount;
         private final Map<String, CompilationResult> results;
 
         public ProjectCompilationResult(int totalFiles, int successCount,
@@ -356,6 +355,7 @@ public class EfficientCompiler {
             this.totalFiles = totalFiles;
             this.successCount = successCount;
             this.failureCount = failureCount;
+            this.skippedCount = 0;
             this.results = results;
         }
 
@@ -368,13 +368,14 @@ public class EfficientCompiler {
         }
 
         public void addSkipped(String file, String reason) {
-            // 可以添加跳过文件的记录
+            skippedCount++;
         }
 
         // Getters
         public int getTotalFiles() { return totalFiles; }
         public int getSuccessCount() { return successCount; }
         public int getFailureCount() { return failureCount; }
+        public int getSkippedCount() { return skippedCount; }
         public Map<String, CompilationResult> getResults() { return results; }
     }
 

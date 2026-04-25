@@ -31,11 +31,16 @@ public class GenerationResult {
     public void addError(String error) {
         errors.add(error);
     }
-    
+
+    public void addStats(String key, String value) {
+        // 统计信息以 warnings 形式暂存，格式: "[stats] key=value"
+        warnings.add("[stats] " + key + "=" + value);
+    }
+
     public boolean hasErrors() {
         return !errors.isEmpty();
     }
-    
+
     // Getters
     public Map<String, String> getFiles() { return Collections.unmodifiableMap(files); }
     public List<String> getWarnings() { return Collections.unmodifiableList(warnings); }

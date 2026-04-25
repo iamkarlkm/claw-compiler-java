@@ -83,11 +83,13 @@ public class SemanticAnalyzer {
         sb.append(node.getType()).append(":");
 
         // 添加关键属性
-        if (node.hasAttribute("name")) {
-            sb.append(node.getAttribute("name")).append(",");
+        if (node.getAttribute("name") != null) {
+            sb.append((String) node.getAttribute("name"));
+            sb.append(",");
         }
-        if (node.hasAttribute("type")) {
-            sb.append(node.getAttribute("type")).append(",");
+        if (node.getAttribute("type") != null) {
+            sb.append((String) node.getAttribute("type"));
+            sb.append(",");
         }
 
         sb.append("|");

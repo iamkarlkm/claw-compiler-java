@@ -58,7 +58,13 @@ public class MemoryManager {
      */
     public List<String> generateAllocationCode(String target) {
         // 从对象池获取List
-        List<String> code = codeListPool.borrow();
+        List<String> code;
+        try {
+            code = codeListPool.borrow();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new ArrayList<>();
+        }
         try {
             code.clear(); // 清空复用
             code.add("ALLOC " + target);
@@ -77,7 +83,13 @@ public class MemoryManager {
      */
     public List<String> generateDeallocationCode(String target) {
         // 从对象池获取List
-        List<String> code = codeListPool.borrow();
+        List<String> code;
+        try {
+            code = codeListPool.borrow();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new ArrayList<>();
+        }
         try {
             code.clear(); // 清空复用
             destructors.values().parallelStream()

@@ -9,12 +9,13 @@ import java.util.regex.*;
 /**
  * 增强版文档格式化提供器
  */
-public class EnhancedFormattingProvider {
+public class EnhancedFormattingProvider extends FormattingProvider {
 
     private final SemanticContext semanticContext;
     private FormattingOptions formattingOptions;
 
     public EnhancedFormattingProvider(SemanticContext semanticContext) {
+        super(semanticContext);
         this.semanticContext = semanticContext;
         this.formattingOptions = new FormattingOptions();
     }
@@ -63,7 +64,9 @@ public class EnhancedFormattingProvider {
         return textEdits;
     }
 
-    public void updateConfiguration(FormattingOptions options) {
-        this.formattingOptions = options;
+    public void updateConfiguration(Object options) {
+        if (options instanceof FormattingOptions) {
+            this.formattingOptions = (FormattingOptions) options;
+        }
     }
 }

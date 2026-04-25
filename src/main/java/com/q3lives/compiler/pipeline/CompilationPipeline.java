@@ -1,8 +1,9 @@
 // ==================== CompilationPipeline.java ====================
 package com.q3lives.compiler.pipeline;
 
-import com.q3lives.annotation.*;
-import com.q3lives.compiler.common.CompilerError;
+import com.q3lives.compiler.annotation.*;
+import com.q3lives.compiler.pipeline.CompilerError;
+import com.q3lives.compiler.common.CompilerConstants;
 import com.q3lives.compiler.core.*;
 import com.q3lives.compiler.decomposer.*;
 import com.q3lives.compiler.frontend.*;
@@ -158,10 +159,6 @@ public class CompilationPipeline {
             long elapsed = System.currentTimeMillis() - startTime;
             log.error("编译失败: {} - {}", fileName, ex.getMessage());
             return CompilationResult.failure(fileName, ex.getMessage(), elapsed);
-        } catch (IOException ex) {
-            long elapsed = System.currentTimeMillis() - startTime;
-            log.error("IO错误: {} - {}", fileName, ex.getMessage());
-            return CompilationResult.failure(String.format(CompilerConstants.ERROR_MESSAGE_FILE_NOT_FOUND, fileName), elapsed);
         } catch (SecurityException ex) {
             long elapsed = System.currentTimeMillis() - startTime;
             log.error("安全错误: {} - {}", fileName, ex.getMessage());

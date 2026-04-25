@@ -319,7 +319,7 @@ public class CompletionProvider {
     /**
      * 上下文类型枚举
      */
-    private enum Context {
+    protected enum Context {
         TYPE,           // 类型补全
         FUNCTION,       // 函数补全
         VARIABLE,       // 变量补全

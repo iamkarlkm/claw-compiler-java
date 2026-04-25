@@ -261,18 +261,14 @@ public class EnhancedCCodeGenerator implements TargetCodeGenerator {
             if (op == OpCode.FUNC_DEF) {
                 String funcName = ops.get(0).toString();
                 // 收集函数参数信息
-                List<String> params = new ArrayList<>();
-                List<String> paramTypes = new ArrayList<>();
+                List<Map.Entry<String, String>> params = new ArrayList<>();
                 if (ops.size() > 1) {
                     Map<String, String> paramMap = (Map<String, String>) ops.get(1);
-                    for (Map.Entry<String, String> entry : paramMap.entrySet()) {
-                        params.add(entry.getKey());
-                        paramTypes.add(entry.getValue());
-                    }
+                    params.addAll(paramMap.entrySet());
                 }
                 String returnType = ops.size() > 2 ? ops.get(2).toString() : "void";
                 String proto = runtime.generateFunctionPrototype(
-                    "public", returnType, funcName, params, paramTypes
+                    "public", returnType, funcName, params, Collections.emptyList()
                 );
                 functionPrototypes.add(proto);
             } else if (op == OpCode.TYPE_DEF) {
@@ -498,63 +494,6 @@ public class EnhancedCCodeGenerator implements TargetCodeGenerator {
             case JUMP_IF_FALSE: {
                 appendLine(runtime.generateIf("!__condition"));
                 indentLevel++;
-                break;
-            }
-
-            // ====== 循环支持（新增） ======
-            case LOOP_BEGIN: {
-                String loopId = "loop_" + loopCounter++;
-                String loopLabel = loopId + "_start";
-                loopLabels.put(loopId, loopLabel);
-
-                appendLine("/* Begin loop: " + loopId + " */");
-                appendLine(loopLabel + ":");
-                break;
-            }
-
-            case LOOP_CONDITION: {
-                String loopId = ops.get(0).toString();
-                String loopLabel = loopLabels.get(loopId);
-                String endLabel = loopLabel + "_end";
-
-                appendLine(runtime.generateIf("!__condition"));
-                indentLevel++;
-                appendLine("goto " + endLabel + ";");
-                indentLevel--;
-                appendLine(runtime.getBlockClose());
-                break;
-            }
-
-            case LOOP_BODY: {
-                String loopId = ops.get(0).toString();
-                String loopLabel = loopLabels.get(loopId);
-
-                appendLine("/* Loop body for " + loopId + " */");
-                break;
-            }
-
-            case LOOP_END: {
-                String loopId = ops.get(0).toString();
-                String loopLabel = loopLabels.get(loopId);
-                String endLabel = loopLabel + "_end";
-
-                appendLine("goto " + loopLabel + ";");
-                appendLine(endLabel + ":");
-                appendLine("/* End loop: " + loopId + " */");
-                break;
-            }
-
-            case BREAK: {
-                String loopId = ops.get(0).toString();
-                String endLabel = loopLabels.get(loopId) + "_end";
-                appendLine("goto " + endLabel + ";");
-                break;
-            }
-
-            case CONTINUE: {
-                String loopId = ops.get(0).toString();
-                String startLabel = loopLabels.get(loopId);
-                appendLine("goto " + startLabel + ";");
                 break;
             }
 

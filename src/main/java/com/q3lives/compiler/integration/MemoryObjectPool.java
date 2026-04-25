@@ -25,10 +25,11 @@ public class MemoryObjectPool<T> {
     /**
      * 对象工厂接口
      */
-    @FunctionalInterface
     public interface ObjectFactory<T> {
         T create();
-        void reset(T obj); // 重置对象状态
+        default void reset(T obj) { // 重置对象状态
+            // 默认空实现
+        }
     }
 
     public MemoryObjectPool(ObjectFactory<T> factory, int poolSize, int maxActive) {

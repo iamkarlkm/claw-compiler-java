@@ -437,6 +437,18 @@ public class PythonRuntime implements TargetRuntime {
     }
 
     // ================================================================
+    //  控制流生成
+    // ================================================================
+
+    public String generateConditionalJump(boolean jumpIfTrue, String condition, String label) {
+        if (jumpIfTrue) {
+            return "if " + condition + ": goto " + label;
+        } else {
+            return "if not " + condition + ": goto " + label;
+        }
+    }
+
+    // ================================================================
     //  注释生成
     // ================================================================
 

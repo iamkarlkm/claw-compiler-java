@@ -4,17 +4,19 @@ import com.q3lives.compiler.annotation.AnnotationResult;
 import com.q3lives.compiler.context.SemanticContext;
 import com.q3lives.compiler.context.StructureContext;
 import com.q3lives.compiler.generators.IRGenerator;
+import com.q3lives.compiler.generators.ffi.FFIBindingTable;
 import java.util.List;
 
 
 /**
  * ClawIR - Claw编译器中间表示的完整封装
- * 
+ *
  * 包含：
  *   - IRProgram（IR指令序列）
  *   - StructureContext（结构信息，供后续代码生成参考）
  *   - SemanticContext（语义信息，供后续类型检查/优化参考）
  *   - AnnotationResult（注解信息，供后续钩子插入参考）
+ *   - FFIBindingTable（FFI外部函数接口绑定表，可选）
  */
 public class ClawIR {
 
@@ -22,6 +24,9 @@ public class ClawIR {
     private final StructureContext structureContext;
     private final SemanticContext semanticContext;
     private final AnnotationResult annotationResult;
+
+    /** FFI 绑定表，用于跨语言调用代码生成（可选） */
+    private FFIBindingTable ffiBindingTable;
 
     public ClawIR(IRGenerator.IRProgram irProgram,
                   StructureContext structureContext,
@@ -33,10 +38,28 @@ public class ClawIR {
         this.annotationResult = annotationResult;
     }
 
+    /** 兼容旧代码的无参构造（测试用） */
+    public ClawIR() {
+        this.irProgram = null;
+        this.structureContext = null;
+        this.semanticContext = null;
+        this.annotationResult = null;
+    }
+
     public IRGenerator.IRProgram getIrProgram() { return irProgram; }
     public StructureContext getStructureContext() { return structureContext; }
     public SemanticContext getSemanticContext() { return semanticContext; }
     public AnnotationResult getAnnotationResult() { return annotationResult; }
+
+    public FFIBindingTable getFfiBindingTable() { return ffiBindingTable; }
+    public void setFfiBindingTable(FFIBindingTable ffiBindingTable) {
+        this.ffiBindingTable = ffiBindingTable;
+    }
+
+    /** 检查是否包含 FFI 声明 */
+    public boolean hasFFIBindings() {
+        return ffiBindingTable != null && ffiBindingTable.hasExternDeclarations();
+    }
 
     /**
      * 检查IR是否有效（无语义错误）

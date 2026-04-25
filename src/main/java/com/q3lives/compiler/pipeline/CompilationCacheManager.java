@@ -1,6 +1,5 @@
 package com.q3lives.compiler.pipeline;
 
-import com.q3lives.compiler.pipeline.GeneratedCode;
 import lombok.extern.slf4j.Slf4j;
 import java.io.*;
 import java.nio.file.*;
@@ -34,12 +33,12 @@ public class CompilationCacheManager {
      */
     public static class CacheEntry {
         private final String key;
-        private final CachedCompilationResult result;
+        private final IncrementalCompiler.CachedCompilationResult result;
         private final long timestamp;
         private final Set<String> dependencies;
         private final long size;
 
-        public CacheEntry(String key, CachedCompilationResult result,
+        public CacheEntry(String key, IncrementalCompiler.CachedCompilationResult result,
                          Set<String> dependencies, long size) {
             this.key = key;
             this.result = result;
@@ -50,7 +49,7 @@ public class CompilationCacheManager {
 
         // Getters
         public String getKey() { return key; }
-        public CachedCompilationResult getResult() { return result; }
+        public IncrementalCompiler.CachedCompilationResult getResult() { return result; }
         public long getTimestamp() { return timestamp; }
         public Set<String> getDependencies() { return dependencies; }
         public long getSize() { return size; }
@@ -124,7 +123,7 @@ public class CompilationCacheManager {
     /**
      * 获取缓存结果
      */
-    public CachedCompilationResult get(String key) {
+    public IncrementalCompiler.CachedCompilationResult get(String key) {
         // 1. 检查内存缓存
         CacheEntry entry = memoryCache.get(key);
         if (entry != null && !entry.isExpired()) {
@@ -137,8 +136,8 @@ public class CompilationCacheManager {
             try (ObjectInputStream ois = new ObjectInputStream(
                     Files.newInputStream(cacheFile))) {
 
-                CachedCompilationResult result =
-                    (CachedCompilationResult) ois.readObject();
+                IncrementalCompiler.CachedCompilationResult result =
+                    (IncrementalCompiler.CachedCompilationResult) ois.readObject();
 
                 // 加载到内存缓存
                 addToMemoryCache(key, result, Collections.emptySet(),
@@ -156,7 +155,7 @@ public class CompilationCacheManager {
     /**
      * 缓存编译结果
      */
-    public void put(String key, CachedCompilationResult result,
+    public void put(String key, IncrementalCompiler.CachedCompilationResult result,
                     Set<String> dependencies) {
         // 1. 添加到内存缓存
         long size = estimateResultSize(result);
@@ -171,7 +170,7 @@ public class CompilationCacheManager {
     /**
      * 添加到内存缓存
      */
-    private void addToMemoryCache(String key, CachedCompilationResult result,
+    private void addToMemoryCache(String key, IncrementalCompiler.CachedCompilationResult result,
                                  Set<String> dependencies, long size) {
         // LRU淘汰策略
         if (memoryCache.size() >= MAX_MEMORY_CACHE_SIZE) {
@@ -199,7 +198,7 @@ public class CompilationCacheManager {
     /**
      * 持久化到磁盘
      */
-    private void persistToDisk(String key, CachedCompilationResult result,
+    private void persistToDisk(String key, IncrementalCompiler.CachedCompilationResult result,
                              Set<String> dependencies) {
         try {
             // 保存编译结果
@@ -377,7 +376,7 @@ public class CompilationCacheManager {
     /**
      * 估算结果大小
      */
-    private long estimateResultSize(CachedCompilationResult result) {
+    private long estimateResultSize(IncrementalCompiler.CachedCompilationResult result) {
         // 简单估算：假设每个结果1KB
         return 1024;
     }

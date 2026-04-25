@@ -11,6 +11,8 @@ import com.q3lives.compiler.generators.IRGenerator.IRInstruction;
 import com.q3lives.compiler.generators.IRGenerator.IRProgram;
 import com.q3lives.compiler.generators.IRGenerator.OpCode;
 
+import com.q3lives.compiler.generators.ffi.CFFIGenerator;
+import com.q3lives.compiler.generators.ffi.FFIBindingTable;
 import com.q3lives.ir.ClawIR;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -124,6 +126,22 @@ public class CompleteCCodeGenerator implements TargetCodeGenerator {
     @Override
     public GenerationResult generate(ClawIR ir, GenerationConfig defaultConfig) {
         GenerationResult result = new GenerationResult();
+        String moduleName = "claw_output";
+
+        // 如果包含 FFI 绑定，先生成 FFI 代码（独立于主代码生成）
+        if (ir != null && ir.hasFFIBindings()) {
+            try {
+                FFIBindingTable ffiTable = ir.getFfiBindingTable();
+                CFFIGenerator ffiGenerator = new CFFIGenerator(ffiTable);
+                String ffiCode = ffiGenerator.generateAll();
+                if (!ffiCode.isEmpty()) {
+                    moduleName = extractModuleName(ir);
+                    result.addFile(moduleName + "_ffi.h", ffiCode);
+                }
+            } catch (Exception e) {
+                result.addError("FFI 代码生成错误: " + e.getMessage());
+            }
+        }
 
         try {
             // 生成主文件
@@ -136,7 +154,7 @@ public class CompleteCCodeGenerator implements TargetCodeGenerator {
             String implCode = getImplementationOutput();
 
             // 生成分离的文件
-            String moduleName = extractModuleName(ir);
+            moduleName = extractModuleName(ir);
             result.addFile(moduleName + ".c", mainCode);
             result.addFile(moduleName + ".h", headerCode);
 

@@ -125,6 +125,17 @@ extern "C" {
 **状态**: ✅ 已完成  
 **测试**: JavaFFIGeneratorManualTest 45/45 通过
 
+#### 2.4 FFI 与目标代码生成器集成
+- [x] ClawIR 添加 FFIBindingTable 字段（可选）
+- [x] EnhancedJavaCodeGenerator 集成 JavaFFIGenerator
+- [x] EnhancedPythonCodeGenerator 集成 PythonFFIGenerator
+- [x] CompleteCCodeGenerator 集成 CFFIGenerator
+- [x] FFI 代码生成独立于主代码生成（即使主代码生成失败也能生成 FFI 代码）
+- [x] FFITargetIntegrationTest 验证通过
+
+**状态**: ✅ 已完成  
+**测试**: FFITargetIntegrationManualTest 8/8 通过
+
 ### 3. 性能优化
 
 #### 3.1 PlatformConstraint 优化

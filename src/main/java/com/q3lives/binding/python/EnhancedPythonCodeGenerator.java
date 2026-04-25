@@ -9,6 +9,8 @@ import com.q3lives.compiler.generators.IRGenerator.IRBasicBlock;
 import com.q3lives.compiler.generators.IRGenerator.IRInstruction;
 import com.q3lives.compiler.generators.IRGenerator.IRProgram;
 import com.q3lives.compiler.generators.IRGenerator.OpCode;
+import com.q3lives.compiler.generators.ffi.FFIBindingTable;
+import com.q3lives.compiler.generators.ffi.PythonFFIGenerator;
 import com.q3lives.ir.ClawIR;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -33,13 +35,11 @@ public class EnhancedPythonCodeGenerator implements TargetCodeGenerator {
     private List<String> currentFuncParams;  // 当前函数的参数列表
     private String stackTopVar;  // 当前栈顶变量名
     private IRProgram currentProgram;  // 当前IR程序
-    private Map<String, List<String>> propertyMapping;  // 属性映射
-    private Set<String> importedModules;  // 已导入的模块
+    private Map<String, List<String>> propertyMapping = new HashMap<>();  // 属性映射
+    private Set<String> importedModules = new LinkedHashSet<>();  // 已导入的模块
 
     public EnhancedPythonCodeGenerator() {
         this.runtime = new PythonRuntime();
-        this.propertyMapping = new HashMap<>();
-        this.importedModules = new LinkedHashSet<>();
     }
 
     @Override
@@ -82,7 +82,11 @@ public class EnhancedPythonCodeGenerator implements TargetCodeGenerator {
         // 4. 元数据（系统注解 @@description 等，生成为模块级 docstring）
         Map<String, Object> metadata = currentProgram.getMetadata();
         if (metadata != null && !metadata.isEmpty()) {
-            appendLine(runtime.generateDocComment(metadata));
+            Map<String, String> stringMetadata = new HashMap<>();
+            for (Map.Entry<String, Object> entry : metadata.entrySet()) {
+                stringMetadata.put(entry.getKey(), String.valueOf(entry.getValue()));
+            }
+            appendLine(runtime.generateDocComment(stringMetadata));
             appendLine("");
         }
 
@@ -115,6 +119,17 @@ public class EnhancedPythonCodeGenerator implements TargetCodeGenerator {
         String code = generate(ir);
         String fileName = "claw_output" + getFileExtension();
         result.addFile(fileName, code);
+
+        // 如果包含 FFI 绑定，生成 FFI 代码
+        if (ir.hasFFIBindings()) {
+            FFIBindingTable ffiTable = ir.getFfiBindingTable();
+            PythonFFIGenerator ffiGenerator = new PythonFFIGenerator(ffiTable);
+            String ffiCode = ffiGenerator.generateAll();
+            if (!ffiCode.isEmpty()) {
+                result.addFile("claw_ffi_bindings.py", ffiCode);
+            }
+        }
+
         return result;
     }
 
@@ -123,7 +138,7 @@ public class EnhancedPythonCodeGenerator implements TargetCodeGenerator {
      */
     private void generateRequiredImports() {
         // 收集所有需要的导入
-        Set<String> requiredImports = runtime.getRequiredImports();
+        List<String> requiredImports = runtime.getRequiredImports();
 
         // 添加IR中需要的导入
         for (IRBasicBlock block : currentProgram.getTopLevelBlocks()) {
@@ -146,7 +161,7 @@ public class EnhancedPythonCodeGenerator implements TargetCodeGenerator {
     /**
      * 从代码块收集导入
      */
-    private void collectImportsFromBlock(IRBasicBlock block, Set<String> imports) {
+    private void collectImportsFromBlock(IRBasicBlock block, Collection<String> imports) {
         for (IRInstruction inst : block.getInstructions()) {
             if (inst.getOpCode() == OpCode.IMPORT) {
                 String module = inst.getOperands().get(0).toString();
@@ -570,6 +585,7 @@ public class EnhancedPythonCodeGenerator implements TargetCodeGenerator {
      * 生成函数定义
      */
     private void generateFunctionDefinition(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         String funcName = ops.get(0).toString();
         appendLine("");
 
@@ -641,19 +657,22 @@ public class EnhancedPythonCodeGenerator implements TargetCodeGenerator {
      * 生成分配
      */
     private void generateAllocation(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         String varName = ops.get(0).toString();
         String typeName = ops.size() > 1 ? ops.get(1).toString() : "Any";
         String pyType = runtime.mapType(typeName);
 
         // 获取初始值
-        String initialValue = runtime.generateAllocation(typeName, varName);
+        String initialValue = runtime.generateAllocation(typeName, Collections.singletonList(varName));
 
         // 生成变量声明（带类型注解）
         appendLine(varName + ": " + pyType + " = " + initialValue);
 
         // 如果需要，添加属性监听
-        if (propertyMapping.containsKey(varName)) {
-            List<String> props = propertyMapping.get(varName);
+        Object rawProps = propertyMapping.get(varName);
+        if (rawProps instanceof List) {
+            @SuppressWarnings("unchecked")
+            List<String> props = (List<String>) rawProps;
             for (String prop : props) {
                 appendLine(runtime.generateBeforePropsHook(prop, varName));
             }
@@ -664,6 +683,7 @@ public class EnhancedPythonCodeGenerator implements TargetCodeGenerator {
      * 生成函数调用
      */
     private void generateFunctionCall(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         String funcName = ops.get(0).toString();
         List<String> args = new ArrayList<>();
 
@@ -717,6 +737,7 @@ public class EnhancedPythonCodeGenerator implements TargetCodeGenerator {
     // ========== 其他生成方法 ==========
 
     private void generateStoreVariable(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         String varName = ops.get(0).toString();
         appendLine(varName + " = " + getStackTopVariable());
         if (inst.getComment() != null) {
@@ -725,12 +746,14 @@ public class EnhancedPythonCodeGenerator implements TargetCodeGenerator {
     }
 
     private void generateLoadVariable(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         String varName = ops.get(0).toString();
         updateStackTopVariable("__stack_top");
         appendLine("__stack_top = " + varName);
     }
 
     private void generateLoadConstant(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         String value = ops.get(0).toString();
         updateStackTopVariable("__stack_top");
         appendLine("__stack_top = " + value);
@@ -756,18 +779,21 @@ public class EnhancedPythonCodeGenerator implements TargetCodeGenerator {
     }
 
     private void generateScopeEnter(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         String scopeName = ops.get(0).toString();
         appendLine(runtime.generateComment("=== Scope: " + scopeName + " ==="));
         indentLevel++;
     }
 
     private void generateScopeExit(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         String scopeName = ops.get(0).toString();
         appendLine(runtime.generateComment("=== Exit scope: " + scopeName + " ==="));
         indentLevel = Math.max(0, indentLevel - 1);
     }
 
     private void generateJump(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         String label = ops.get(0).toString();
         if ("flow to".equals(label)) {
             appendLine("pass  # Flow control implemented in FUNC_CALL");
@@ -777,12 +803,14 @@ public class EnhancedPythonCodeGenerator implements TargetCodeGenerator {
     }
 
     private void generateConditionalJump(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         String label = ops.get(0).toString();
         boolean jumpIfTrue = inst.getOpCode() == OpCode.JUMP_IF_TRUE;
         appendLine(runtime.generateConditionalJump(jumpIfTrue, "__condition", label));
     }
 
     private void generateBeforePropsHook(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         String prop = ops.get(0).toString();
         appendLine(runtime.generateBeforePropsHook(prop, "__new_value"));
         if (inst.getComment() != null) {
@@ -791,34 +819,40 @@ public class EnhancedPythonCodeGenerator implements TargetCodeGenerator {
     }
 
     private void generateAfterPropsHook(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         String prop = ops.get(0).toString();
         appendLine(runtime.generateAfterPropsHook(prop, "__old_value", "__new_value"));
     }
 
     private void generateBeforeNameHook(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         String methodName = ops.get(0).toString();
         String target = ops.size() > 1 ? ops.get(1).toString() : "self";
         appendLine(runtime.generateConstructorHook(methodName, target));
     }
 
     private void generateAfterNameHook(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         String methodName = ops.get(0).toString();
         String target = ops.size() > 1 ? ops.get(1).toString() : "self";
         appendLine(runtime.generateDestructorHook(methodName, target));
     }
 
     private void generatePropertySet(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         String prop = ops.get(0).toString();
         appendLine(prop + " = __new_value");
     }
 
     private void generateArrayCreation(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         String elemType = ops.get(0).toString();
         String size = ops.size() > 1 ? ops.get(1).toString() : "0";
         appendLine("__stack_top = " + runtime.generateArrayCreation(elemType, size));
     }
 
     private void generateArrayGet(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         String arrName = ops.get(0).toString();
         String index = ops.size() > 1 ? ops.get(1).toString() : "0";
         appendLine("if 0 <= " + index + " < len(" + arrName + "):");
@@ -832,6 +866,7 @@ public class EnhancedPythonCodeGenerator implements TargetCodeGenerator {
     }
 
     private void generateArraySet(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         String arrName = ops.get(0).toString();
         String index = ops.size() > 1 ? ops.get(1).toString() : "0";
         String value = ops.size() > 2 ? ops.get(2).toString() : "__stack_top";
@@ -846,11 +881,13 @@ public class EnhancedPythonCodeGenerator implements TargetCodeGenerator {
     }
 
     private void generateDeallocation(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         String varName = ops.get(0).toString();
         appendLine(runtime.generateDeallocation(varName));
     }
 
     private void generateReturn(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         String retVal = ops.isEmpty() ? null : ops.get(0).toString();
         appendLine(runtime.generateReturn(retVal));
     }
@@ -864,6 +901,7 @@ public class EnhancedPythonCodeGenerator implements TargetCodeGenerator {
     }
 
     private void generateExceptionCatch(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         String exType = ops.get(0).toString();
         String varName = ops.size() > 1 ? ops.get(1).toString() : "e";
         String handlerBody = ops.size() > 2 ? ops.get(2).toString() : "pass  # handle exception";
@@ -871,16 +909,19 @@ public class EnhancedPythonCodeGenerator implements TargetCodeGenerator {
     }
 
     private void generateExceptionThrows(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         String exType = ops.get(0).toString();
         appendLine(runtime.generateComment("Raises: " + runtime.mapType(exType)));
     }
 
     private void generateLabel(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         String labelName = ops.get(0).toString();
         appendLine(labelName + ":");
     }
 
     private void generateImport(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         String module = ops.get(0).toString();
         String symbol = ops.size() > 1 ? ops.get(1).toString() : null;
         String importLine = runtime.generateImport(module, symbol);
@@ -889,11 +930,13 @@ public class EnhancedPythonCodeGenerator implements TargetCodeGenerator {
     }
 
     private void generateExport(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         String symbol = ops.get(0).toString();
         appendLine(runtime.generateExport(symbol));
     }
 
     private void generateTypeDef(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         String typeName = ops.get(0).toString();
         appendLine("");
         appendLine(runtime.generateTypeDefinitionHeader(typeName, "public"));
@@ -907,11 +950,13 @@ public class EnhancedPythonCodeGenerator implements TargetCodeGenerator {
     }
 
     private void generateMetadata(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         appendLine(runtime.generateComment("metadata: " +
             ops.stream().map(Object::toString).collect(Collectors.joining(", "))));
     }
 
     private void generateNop(IRInstruction inst) {
+        List<Object> ops = inst.getOperands();
         if (!ops.isEmpty()) {
             appendLine(runtime.generateComment(ops.get(0).toString()));
         } else {

@@ -168,10 +168,9 @@ public class IncrementalCompiler {
         }
 
         // 创建新的CompilationResult实例（避免返回引用）
-        return new CompilationResult(
-            cached.getSuccess(),
-            cached.getGeneratedCode(),
-            cached.getElapsedTime()
+        return CompilationResult.success(
+            cached.generatedCode(),
+            cached.elapsedTime()
         );
     }
 
@@ -241,9 +240,9 @@ public class IncrementalCompiler {
 
         // 缓存新结果
         CachedCompilationResult cached = new CachedCompilationResult(
-            result.getSuccess(),
+            result.isSuccess(),
             result.getGeneratedCode(),
-            result.getElapsedTime()
+            result.getElapsedMillis()
         );
 
         compilationCache.put(fileName, cached);
