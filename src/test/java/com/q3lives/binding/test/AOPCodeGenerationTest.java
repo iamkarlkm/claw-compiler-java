@@ -238,6 +238,117 @@ public class AOPCodeGenerationTest {
         System.out.println("JavaRuntime AOP 辅助方法测试通过 ✓");
     }
 
+    // ==================== AOP 织入测试 ====================
+
+    @Test
+    void testPythonAdviceWeaving() {
+        System.out.println("\n=== 测试 Python Advice 织入 ===");
+
+        EnhancedPythonCodeGenerator generator = new EnhancedPythonCodeGenerator();
+        ClawIR ir = createIRWithBeforeAdvice("processData", "processData");
+
+        String pythonCode = generator.generate(ir);
+
+        assertNotNull(pythonCode);
+        // 验证函数定义后存在 apply_advice 绑定
+        assertTrue(pythonCode.contains("apply_advice"), "Python 应生成 apply_advice 绑定代码");
+        assertTrue(pythonCode.contains("before_processData"), "应引用 before_processData advice");
+        System.out.println("Python Advice 织入测试通过 ✓");
+    }
+
+    @Test
+    void testJavaAdviceWeaving() {
+        System.out.println("\n=== 测试 Java Advice 织入 ===");
+
+        EnhancedJavaCodeGenerator generator = new EnhancedJavaCodeGenerator();
+        ClawIR ir = createIRWithBeforeAdvice("processData", "processData");
+
+        String javaCode = generator.generate(ir);
+
+        assertNotNull(javaCode);
+        // 验证方法体中包含 before advice 调用
+        assertTrue(javaCode.contains("JoinPoint __jp_before"), "Java 方法体应创建 JoinPoint");
+        assertTrue(javaCode.contains("before_processData(__jp_before)"), "Java 方法体应调用 before advice");
+        System.out.println("Java Advice 织入测试通过 ✓");
+    }
+
+    @Test
+    void testCAdviceWeaving() {
+        System.out.println("\n=== 测试 C Advice 织入 ===");
+
+        CompleteCCodeGenerator generator = new CompleteCCodeGenerator();
+        ClawIR ir = createIRWithBeforeAdvice("processData", "processData");
+
+        String cCode = generator.generate(ir);
+
+        assertNotNull(cCode);
+        // 验证函数体中包含 JoinPoint 创建和 advice 调用
+        assertTrue(cCode.contains("join_point_create"), "C 函数体应创建 JoinPoint");
+        assertTrue(cCode.contains("before_processData(__jp)"), "C 函数体应调用 before advice");
+        System.out.println("C Advice 织入测试通过 ✓");
+    }
+
+    @Test
+    void testAroundAdviceWeaving() {
+        System.out.println("\n=== 测试 Around Advice 织入 ===");
+
+        // Java around advice 应生成 try-finally
+        EnhancedJavaCodeGenerator javaGen = new EnhancedJavaCodeGenerator();
+        ClawIR javaIr = createIRWithAroundAdvice("processData", "processData");
+        String javaCode = javaGen.generate(javaIr);
+        assertTrue(javaCode.contains("try {"), "Java around advice 应生成 try 块");
+        assertTrue(javaCode.contains("} finally {"), "Java around advice 应生成 finally 块");
+
+        // Python around advice 应生成 apply_advice 绑定（包含 around 参数）
+        EnhancedPythonCodeGenerator pyGen = new EnhancedPythonCodeGenerator();
+        ClawIR pyIr = createIRWithAroundAdvice("processData", "processData");
+        String pyCode = pyGen.generate(pyIr);
+        assertTrue(pyCode.contains("around="), "Python around advice 应生成 around 参数");
+
+        System.out.println("Around Advice 织入测试通过 ✓");
+    }
+
+    @Test
+    void testMultipleAdvicesOnSameMethod() {
+        System.out.println("\n=== 测试多个 Advice 织入到同一方法 ===");
+
+        IRGenerator.IRProgram program = new IRGenerator.IRProgram("aop_test.claw");
+        IRGenerator.IRBasicBlock block = new IRGenerator.IRBasicBlock("multi_advice", "block", 0);
+
+        block.addInstruction(new IRGenerator.IRInstruction(
+            OpCode.TYPE_DEF, 1, "aop_test.claw", "TestClass"
+        ));
+        block.addInstruction(new IRGenerator.IRInstruction(
+            OpCode.FUNC_DEF, 2, "aop_test.claw", "processData",
+            new java.util.HashMap<>(), "void"
+        ));
+        block.addInstruction(new IRGenerator.IRInstruction(
+            OpCode.BEFORE_ADVICE, 3, "aop_test.claw", "processData", "processData"
+        ));
+        block.addInstruction(new IRGenerator.IRInstruction(
+            OpCode.AFTER_ADVICE, 4, "aop_test.claw", "processData", "processData"
+        ));
+        block.addInstruction(new IRGenerator.IRInstruction(
+            OpCode.FUNC_END, 5, "aop_test.claw"
+        ));
+        program.addTopLevelBlock(block);
+        ClawIR ir = new ClawIR(program, null, null, null);
+
+        // Java
+        EnhancedJavaCodeGenerator javaGen = new EnhancedJavaCodeGenerator();
+        String javaCode = javaGen.generate(ir);
+        assertTrue(javaCode.contains("before_processData"), "应包含 before advice 调用");
+        assertTrue(javaCode.contains("after_processData"), "应包含 after advice 调用");
+
+        // Python
+        EnhancedPythonCodeGenerator pyGen = new EnhancedPythonCodeGenerator();
+        String pyCode = pyGen.generate(ir);
+        assertTrue(pyCode.contains("before="), "应包含 before 参数");
+        assertTrue(pyCode.contains("after="), "应包含 after 参数");
+
+        System.out.println("多个 Advice 织入测试通过 ✓");
+    }
+
     // ==================== IR 辅助构造方法 ====================
 
     private ClawIR createIRWithAspectDef(String aspectName) {

@@ -52,6 +52,10 @@ public class CompleteCCodeGenerator implements TargetCodeGenerator {
     // 代码生成器配置
     private final CCodeConfig config;
 
+    // AOP 织入支持：函数名 -> advice 绑定信息列表
+    private Map<String, List<AOPBindingInfo>> methodAdviceMap;
+    private boolean hasAOPDefinitions;
+
     public CompleteCCodeGenerator() {
         this.runtime = new CRuntime();
         this.symbolTable = new SymbolTable();
@@ -591,6 +595,19 @@ public class CompleteCCodeGenerator implements TargetCodeGenerator {
         implOutput.append("#include \"").append(extractModuleName(ir)).append(".h\"\n");
         implOutput.append("#include \"claw_runtime.c\"\n\n");
 
+        // 扫描 AOP 定义，构建函数->advice 映射
+        methodAdviceMap = new HashMap<>();
+        hasAOPDefinitions = false;
+        for (IRBasicBlock block : program.getTopLevelBlocks()) {
+            scanAOPDefinitions(block);
+        }
+
+        // 如果有 AOP 定义，追加 JoinPoint 支持代码
+        if (hasAOPDefinitions) {
+            implOutput.append(runtime.generateJoinPointSupport());
+            implOutput.append("\n\n");
+        }
+
         // 实现 helper 函数
         generateHelperFunctions();
 
@@ -608,6 +625,42 @@ public class CompleteCCodeGenerator implements TargetCodeGenerator {
         // 实现错误处理函数
         if (config.isGenerateErrorHandling()) {
             generateErrorHandlingFunctions();
+        }
+    }
+
+    /**
+     * 扫描 IR 块中的 AOP 指令
+     */
+    private void scanAOPDefinitions(IRBasicBlock block) {
+        for (IRInstruction inst : block.getInstructions()) {
+            switch (inst.getOpCode()) {
+                case ASPECT_DEF:
+                    hasAOPDefinitions = true;
+                    break;
+                case BEFORE_ADVICE:
+                case AFTER_ADVICE:
+                case AROUND_ADVICE: {
+                    hasAOPDefinitions = true;
+                    List<Object> ops = inst.getOperands();
+                    String methodName = ops.get(0).toString();
+                    String pointcut = ops.size() > 1 ? ops.get(1).toString() : "";
+                    String adviceType = switch (inst.getOpCode()) {
+                        case BEFORE_ADVICE -> "before";
+                        case AFTER_ADVICE -> "after";
+                        case AROUND_ADVICE -> "around";
+                        default -> "";
+                    };
+                    methodAdviceMap
+                        .computeIfAbsent(methodName, k -> new ArrayList<>())
+                        .add(new AOPBindingInfo(adviceType + "_" + methodName, pointcut, adviceType));
+                    break;
+                }
+                default:
+                    break;
+            }
+        }
+        for (IRBasicBlock child : block.getChildren()) {
+            scanAOPDefinitions(child);
         }
     }
 
@@ -685,19 +738,30 @@ public class CompleteCCodeGenerator implements TargetCodeGenerator {
         FunctionSymbol function = symbolTable.getFunction(funcName);
         if (function == null) return;
 
+        // 获取当前函数的 advice 列表
+        List<AOPBindingInfo> advices = methodAdviceMap.getOrDefault(funcName, Collections.emptyList());
+
         // 生成函数签名
         String signature = generateFunctionPrototype(function);
         implOutput.append(signature).append(" {\n");
 
-        // 函数体 - 从 IR 指令生成
-        implOutput.append(generateFunctionBody(block, function));
+        // 函数体 - 从 IR 指令生成（传入 advice 列表）
+        implOutput.append(generateFunctionBody(block, function, advices));
 
         implOutput.append("}\n\n");
     }
 
     private String generateFunctionBody(IRBasicBlock block, FunctionSymbol function) {
+        return generateFunctionBody(block, function, Collections.emptyList());
+    }
+
+    private String generateFunctionBody(IRBasicBlock block, FunctionSymbol function, List<AOPBindingInfo> advices) {
         StringBuilder body = new StringBuilder();
         body.append("    // Function implementation for ").append(function.getName()).append("\n");
+
+        boolean hasBefore = advices.stream().anyMatch(a -> "before".equals(a.adviceType));
+        boolean hasAfter = advices.stream().anyMatch(a -> "after".equals(a.adviceType));
+        boolean hasAround = advices.stream().anyMatch(a -> "around".equals(a.adviceType));
 
         // 参数验证
         if (config.isGenerateParameterChecks()) {
@@ -707,12 +771,34 @@ public class CompleteCCodeGenerator implements TargetCodeGenerator {
         // 局部变量声明
         body.append(generateLocalVariables(function));
 
+        // AOP Before advice
+        if (hasBefore || hasAround) {
+            body.append("    // AOP advice begin\n");
+            body.append("    JoinPoint* __jp = join_point_create(\"").append(function.getName()).append("\", NULL, 0, NULL);\n");
+            for (AOPBindingInfo aop : advices) {
+                if ("before".equals(aop.adviceType) || "around".equals(aop.adviceType)) {
+                    body.append("    ").append(aop.name).append("(__jp);\n");
+                }
+            }
+        }
+
         // 从 IR 指令生成函数体逻辑
         String instructionsCode = generateInstructionsAsC(block, function);
         if (instructionsCode.isEmpty()) {
             body.append("    // (empty function body)\n");
         } else {
             body.append(instructionsCode);
+        }
+
+        // AOP After advice（在默认返回之前插入）
+        if (hasAfter || hasAround) {
+            body.append("    // AOP advice end\n");
+            for (AOPBindingInfo aop : advices) {
+                if ("after".equals(aop.adviceType) || "around".equals(aop.adviceType)) {
+                    body.append("    ").append(aop.name).append("(__jp);\n");
+                }
+            }
+            body.append("    join_point_free(__jp);\n");
         }
 
         // 如果函数体没有显式返回且函数有返回值，添加默认返回
@@ -1419,5 +1505,20 @@ public class CompleteCCodeGenerator implements TargetCodeGenerator {
         String getVariableName() { return variableName; }
         String getTypeName() { return typeName; }
         String getScope() { return scope; }
+    }
+
+    /**
+     * AOP 绑定信息（内部辅助类）
+     */
+    private static class AOPBindingInfo {
+        final String name;        // advice 函数名
+        final String pointcut;    // 切入点表达式
+        final String adviceType;  // before / after / around
+
+        AOPBindingInfo(String name, String pointcut, String adviceType) {
+            this.name = name;
+            this.pointcut = pointcut;
+            this.adviceType = adviceType;
+        }
     }
 }

@@ -33,10 +33,15 @@ public class EnhancedPythonCodeGenerator implements TargetCodeGenerator {
     private StringBuilder output;
     private int indentLevel;
     private List<String> currentFuncParams;  // 当前函数的参数列表
+    private String currentFuncName;  // 当前函数名（用于 AOP 织入）
     private String stackTopVar;  // 当前栈顶变量名
     private IRProgram currentProgram;  // 当前IR程序
     private Map<String, List<String>> propertyMapping = new HashMap<>();  // 属性映射
     private Set<String> importedModules = new LinkedHashSet<>();  // 已导入的模块
+
+    // AOP 织入支持：方法名 -> advice 绑定信息列表
+    private Map<String, List<AOPBindingInfo>> methodAdviceMap;
+    private boolean hasAOPDefinitions;
 
     public EnhancedPythonCodeGenerator() {
         this.runtime = new PythonRuntime();
@@ -93,12 +98,23 @@ public class EnhancedPythonCodeGenerator implements TargetCodeGenerator {
         // 5. 从IR中提取属性列表
         extractPropertyListFromIR();
 
-        // 6. 遍历所有顶层IR块，生成代码
+        // 6. 扫描 AOP 定义，构建方法->advice 映射
+        methodAdviceMap = new HashMap<>();
+        hasAOPDefinitions = false;
+        scanAOPDefinitions(currentProgram);
+
+        // 7. 遍历所有顶层IR块，生成代码
         for (IRBasicBlock topBlock : currentProgram.getTopLevelBlocks()) {
             generateBlock(topBlock);
         }
 
-        // 7. __main__ 入口
+        // 8. 如果有 AOP 定义，追加 JoinPoint 支持类和 apply_advice
+        if (hasAOPDefinitions) {
+            appendLine("");
+            appendLine(runtime.generateJoinPointSupport());
+        }
+
+        // 9. __main__ 入口
         appendLine("");
         appendLine("if __name__ == \"__main__\":");
         indentLevel++;
@@ -249,7 +265,12 @@ public class EnhancedPythonCodeGenerator implements TargetCodeGenerator {
             case FUNC_END: {
                 appendLine("");
                 indentLevel = Math.max(0, indentLevel - 1);
+                // AOP 织入：函数定义结束后，生成 apply_advice 绑定
+                if (currentFuncName != null) {
+                    generateAOPWeaving(currentFuncName);
+                }
                 currentFuncParams = null;
+                currentFuncName = null;
                 break;
             }
 
@@ -618,11 +639,107 @@ public class EnhancedPythonCodeGenerator implements TargetCodeGenerator {
     }
 
     /**
+     * 扫描所有顶层块中的 AOP 指令，构建方法->advice 映射
+     */
+    private void scanAOPDefinitions(IRProgram program) {
+        for (IRBasicBlock block : program.getTopLevelBlocks()) {
+            scanAOPInBlock(block);
+        }
+    }
+
+    private void scanAOPInBlock(IRBasicBlock block) {
+        for (IRInstruction inst : block.getInstructions()) {
+            switch (inst.getOpCode()) {
+                case ASPECT_DEF:
+                    hasAOPDefinitions = true;
+                    break;
+                case BEFORE_ADVICE:
+                case AFTER_ADVICE:
+                case AROUND_ADVICE: {
+                    hasAOPDefinitions = true;
+                    List<Object> ops = inst.getOperands();
+                    String methodName = ops.get(0).toString();
+                    String pointcut = ops.size() > 1 ? ops.get(1).toString() : "";
+                    String adviceType = switch (inst.getOpCode()) {
+                        case BEFORE_ADVICE -> "before";
+                        case AFTER_ADVICE -> "after";
+                        case AROUND_ADVICE -> "around";
+                        default -> "";
+                    };
+                    methodAdviceMap
+                        .computeIfAbsent(methodName, k -> new ArrayList<>())
+                        .add(new AOPBindingInfo(adviceType, pointcut));
+                    break;
+                }
+                default:
+                    break;
+            }
+        }
+        for (IRBasicBlock child : block.getChildren()) {
+            scanAOPInBlock(child);
+        }
+    }
+
+    /**
+     * 为当前函数生成 AOP 装饰器绑定代码
+     */
+    private void generateAOPWeaving(String funcName) {
+        List<AOPBindingInfo> advices = methodAdviceMap.get(funcName);
+        if (advices == null || advices.isEmpty()) {
+            return;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(funcName).append(" = apply_advice(").append(funcName);
+
+        // 收集 before advice
+        List<String> beforeAdvices = new ArrayList<>();
+        List<String> afterAdvices = new ArrayList<>();
+        List<String> aroundAdvices = new ArrayList<>();
+
+        for (AOPBindingInfo info : advices) {
+            String adviceFuncName = info.adviceType + "_" + funcName;
+            switch (info.adviceType) {
+                case "before" -> beforeAdvices.add(adviceFuncName);
+                case "after" -> afterAdvices.add(adviceFuncName);
+                case "around" -> aroundAdvices.add(adviceFuncName);
+            }
+        }
+
+        if (!beforeAdvices.isEmpty()) {
+            sb.append(", before=").append(beforeAdvices.get(0));
+        }
+        if (!afterAdvices.isEmpty()) {
+            sb.append(", after=").append(afterAdvices.get(0));
+        }
+        if (!aroundAdvices.isEmpty()) {
+            sb.append(", around=").append(aroundAdvices.get(0));
+        }
+
+        sb.append(")");
+        appendLine(sb.toString());
+    }
+
+    /**
+     * AOP 绑定信息（内部辅助类）
+     */
+    private static class AOPBindingInfo {
+        final String adviceType;  // before / after / around
+        final String pointcut;    // 切入点表达式
+
+        AOPBindingInfo(String adviceType, String pointcut) {
+            this.adviceType = adviceType;
+            this.pointcut = pointcut;
+        }
+    }
+
+    /**
      * 生成函数定义
      */
     private void generateFunctionDefinition(IRInstruction inst) {
         List<Object> ops = inst.getOperands();
         String funcName = ops.get(0).toString();
+        currentFuncName = funcName;  // 记录当前函数名，用于 AOP 织入
         appendLine("");
 
         // 重置当前函数参数列表

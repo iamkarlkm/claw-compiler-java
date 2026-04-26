@@ -884,6 +884,39 @@ public class JavaRuntime implements TargetRuntime {
         return sb.toString();
     }
 
+    // ==================== AOP 织入支持 ====================
+
+    @Override
+    public boolean supportsAOP() {
+        return true;
+    }
+
+    @Override
+    public String generateBeforeAdviceCall(String adviceName, String joinPointName) {
+        return adviceName + "(" + joinPointName + ");";
+    }
+
+    @Override
+    public String generateAfterAdviceCall(String adviceName, String joinPointName) {
+        return adviceName + "(" + joinPointName + ");";
+    }
+
+    @Override
+    public String generateAroundAdviceBegin(String adviceName, String joinPointName) {
+        return adviceName + "(" + joinPointName + ");";
+    }
+
+    @Override
+    public String generateAroundAdviceEnd(String adviceName, String joinPointName, String resultVar) {
+        return adviceName + "(" + joinPointName + ", " + resultVar + ");";
+    }
+
+    @Override
+    public String generateJoinPointCreate(String joinPointName, String methodName,
+                                           String argsExpr, String targetExpr) {
+        return "JoinPoint " + joinPointName + " = JoinPoint.create(\"" + methodName + "\", " + argsExpr + ", " + targetExpr + ", " + targetExpr + ");";
+    }
+
     // ==================== 私有工具方法 ====================
 
     private String capitalize(String s) {

@@ -653,10 +653,81 @@ public interface TargetRuntime {
 
     /**
      * 生成异常类型定义（如果Claw源码中定义了自定义异常类型）
-     * 
+     *
      * @param exceptionName  异常类型名
      * @param parentType     父异常类型（null表示默认基类）
      * @return 完整的异常类定义代码
      */
     String generateExceptionTypeDefinition(String exceptionName, String parentType);
+
+    // ================================================================
+    //  AOP (Aspect-Oriented Programming) 织入支持
+    // ================================================================
+
+    /**
+     * 目标语言是否支持 AOP 织入
+     * @return 默认返回 false，支持 AOP 的运行时应覆盖为 true
+     */
+    default boolean supportsAOP() {
+        return false;
+    }
+
+    /**
+     * 生成 before advice 调用代码
+     *
+     * @param adviceName     advice 函数名
+     * @param joinPointName  JoinPoint 变量名
+     * @return 调用代码，如 "before_processData(jp);"
+     */
+    default String generateBeforeAdviceCall(String adviceName, String joinPointName) {
+        return generateComment("TODO: before advice call");
+    }
+
+    /**
+     * 生成 after advice 调用代码
+     *
+     * @param adviceName     advice 函数名
+     * @param joinPointName  JoinPoint 变量名
+     * @return 调用代码，如 "after_processData(jp);"
+     */
+    default String generateAfterAdviceCall(String adviceName, String joinPointName) {
+        return generateComment("TODO: after advice call");
+    }
+
+    /**
+     * 生成 around advice 开始调用代码
+     *
+     * @param adviceName     advice 函数名
+     * @param joinPointName  JoinPoint 变量名
+     * @return 调用代码，如 "around_processData_begin(jp);"
+     */
+    default String generateAroundAdviceBegin(String adviceName, String joinPointName) {
+        return generateComment("TODO: around advice begin");
+    }
+
+    /**
+     * 生成 around advice 结束调用代码
+     *
+     * @param adviceName     advice 函数名
+     * @param joinPointName  JoinPoint 变量名
+     * @param resultVar      结果变量名（around advice 可能需要修改返回值）
+     * @return 调用代码，如 "around_processData_end(jp, result);"
+     */
+    default String generateAroundAdviceEnd(String adviceName, String joinPointName, String resultVar) {
+        return generateComment("TODO: around advice end");
+    }
+
+    /**
+     * 生成 JoinPoint 创建代码
+     *
+     * @param joinPointName  JoinPoint 变量名
+     * @param methodName     目标方法名
+     * @param argsExpr       参数表达式（目标语言的数组/列表表达式）
+     * @param targetExpr     目标对象表达式（如 "this"）
+     * @return 创建代码，如 "JoinPoint jp = JoinPoint.create(...)"
+     */
+    default String generateJoinPointCreate(String joinPointName, String methodName,
+                                            String argsExpr, String targetExpr) {
+        return generateComment("TODO: join point create");
+    }
 }

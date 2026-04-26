@@ -289,6 +289,9 @@ public class EnhancedJavaCodeGenerator implements TargetCodeGenerator {
         // 记录已声明的类
         declaredClasses.add(className);
 
+        // 扫描 AOP advice，构建方法->advice 映射
+        Map<String, List<AOPMethodInfo>> methodAdviceMap = collectMethodAdvices(block);
+
         appendLine("public class " + className + " {");
         indentLevel++;
 
@@ -298,8 +301,8 @@ public class EnhancedJavaCodeGenerator implements TargetCodeGenerator {
         // 生成类字段
         generateClassFields(block);
 
-        // 生成类方法
-        generateClassMethods(block);
+        // 生成类方法（传入 AOP 映射以实现织入）
+        generateClassMethods(block, methodAdviceMap);
 
         // 生成 AOP 通知方法
         generateAOPMethods(block);
@@ -312,6 +315,36 @@ public class EnhancedJavaCodeGenerator implements TargetCodeGenerator {
 
         // 在类定义外部生成独立的 AOP Aspect 类
         generateAspectClasses(block);
+    }
+
+    /**
+     * 从 IR 块中收集方法->advice 映射
+     */
+    private Map<String, List<AOPMethodInfo>> collectMethodAdvices(IRBasicBlock block) {
+        Map<String, List<AOPMethodInfo>> map = new HashMap<>();
+        for (IRInstruction inst : block.getInstructions()) {
+            switch (inst.getOpCode()) {
+                case BEFORE_ADVICE:
+                case AFTER_ADVICE:
+                case AROUND_ADVICE: {
+                    List<Object> instOps = inst.getOperands();
+                    String methodName = instOps.get(0).toString();
+                    String pointcut = instOps.size() > 1 ? instOps.get(1).toString() : "";
+                    String adviceType = switch (inst.getOpCode()) {
+                        case BEFORE_ADVICE -> "before";
+                        case AFTER_ADVICE -> "after";
+                        case AROUND_ADVICE -> "around";
+                        default -> "";
+                    };
+                    map.computeIfAbsent(methodName, k -> new ArrayList<>())
+                       .add(new AOPMethodInfo(adviceType + "_" + methodName, pointcut, adviceType));
+                    break;
+                }
+                default:
+                    break;
+            }
+        }
+        return map;
     }
 
     /**
@@ -349,7 +382,7 @@ public class EnhancedJavaCodeGenerator implements TargetCodeGenerator {
     /**
      * 生成类方法
      */
-    private void generateClassMethods(IRBasicBlock block) {
+    private void generateClassMethods(IRBasicBlock block, Map<String, List<AOPMethodInfo>> methodAdviceMap) {
         // 收集方法信息
         List<MethodInfo> methods = new ArrayList<>();
 
@@ -367,9 +400,10 @@ public class EnhancedJavaCodeGenerator implements TargetCodeGenerator {
             }
         }
 
-        // 生成方法声明
+        // 生成方法声明（传入 AOP 映射）
         for (MethodInfo method : methods) {
-            generateMethod(method);
+            List<AOPMethodInfo> advices = methodAdviceMap.getOrDefault(method.name, Collections.emptyList());
+            generateMethod(method, advices);
         }
 
         if (!methods.isEmpty()) {
@@ -380,7 +414,7 @@ public class EnhancedJavaCodeGenerator implements TargetCodeGenerator {
     /**
      * 生成单个方法
      */
-    private void generateMethod(MethodInfo method) {
+    private void generateMethod(MethodInfo method, List<AOPMethodInfo> advices) {
         // 生成方法签名
         StringBuilder signature = new StringBuilder();
         signature.append("public ").append(mapGenericType(method.returnType)).append(" ").append(method.name).append("(");
@@ -398,8 +432,8 @@ public class EnhancedJavaCodeGenerator implements TargetCodeGenerator {
         appendLine("{");
         indentLevel++;
 
-        // 生成方法体
-        generateMethodBody(method);
+        // 生成方法体（传入 advice 列表以实现织入）
+        generateMethodBody(method, advices);
 
         indentLevel--;
         appendLine("}");
@@ -409,25 +443,91 @@ public class EnhancedJavaCodeGenerator implements TargetCodeGenerator {
     }
 
     /**
-     * 生成方法体
+     * 生成方法体（支持 AOP 织入）
      */
-    private void generateMethodBody(MethodInfo method) {
+    private void generateMethodBody(MethodInfo method, List<AOPMethodInfo> advices) {
         // 生成简单的实现
         appendLine("// Implementation for " + method.name);
 
-        // 根据返回类型生成不同的返回语句
-        if (!"void".equals(method.returnType)) {
-            if ("String".equals(method.returnType)) {
-                appendLine("return \"\";");
-            } else if ("boolean".equals(method.returnType) || "Bool".equals(method.returnType)) {
-                appendLine("return false;");
-            } else if ("int".equals(method.returnType) || "Int".equals(method.returnType)) {
-                appendLine("return 0;");
-            } else if ("double".equals(method.returnType) || "Float".equals(method.returnType)) {
-                appendLine("return 0.0;");
-            } else {
-                appendLine("return null;");
+        boolean hasAround = advices.stream().anyMatch(a -> "around".equals(a.adviceType));
+        boolean hasBefore = advices.stream().anyMatch(a -> "before".equals(a.adviceType));
+        boolean hasAfter = advices.stream().anyMatch(a -> "after".equals(a.adviceType));
+
+        // 如果有 around advice，用 try-finally 包裹
+        if (hasAround) {
+            appendLine("// AOP Around advice wrapper");
+            appendLine("JoinPoint __jp = JoinPoint.create(\"" + method.name + "\", new Object[]{}, this, this);");
+            for (AOPMethodInfo aop : advices) {
+                if ("around".equals(aop.adviceType)) {
+                    appendLine(aop.name + "(__jp);");
+                }
             }
+            appendLine("try {");
+            indentLevel++;
+        }
+
+        // Before advice
+        if (hasBefore) {
+            appendLine("// AOP Before advice");
+            appendLine("JoinPoint __jp_before = JoinPoint.create(\"" + method.name + "\", new Object[]{}, this, this);");
+            for (AOPMethodInfo aop : advices) {
+                if ("before".equals(aop.adviceType)) {
+                    appendLine(aop.name + "(__jp_before);");
+                }
+            }
+        }
+
+        // 原始方法体：根据返回类型生成默认返回语句
+        if (!"void".equals(method.returnType)) {
+            appendLine(mapGenericType(method.returnType) + " __result = " + getDefaultReturnValue(method.returnType) + ";");
+        }
+
+        // After advice
+        if (hasAfter) {
+            appendLine("// AOP After advice");
+            appendLine("JoinPoint __jp_after = JoinPoint.create(\"" + method.name + "\", new Object[]{}, this, this);");
+            for (AOPMethodInfo aop : advices) {
+                if ("after".equals(aop.adviceType)) {
+                    appendLine(aop.name + "(__jp_after);");
+                }
+            }
+        }
+
+        // Around advice end
+        if (hasAround) {
+            indentLevel--;
+            appendLine("} finally {");
+            indentLevel++;
+            appendLine("JoinPoint __jp_end = JoinPoint.create(\"" + method.name + "\", new Object[]{}, this, this);");
+            for (AOPMethodInfo aop : advices) {
+                if ("around".equals(aop.adviceType)) {
+                    appendLine(aop.name + "(__jp_end);");
+                }
+            }
+            indentLevel--;
+            appendLine("}");
+        }
+
+        // 返回语句
+        if (!"void".equals(method.returnType)) {
+            appendLine("return __result;");
+        }
+    }
+
+    /**
+     * 根据返回类型获取默认值表达式
+     */
+    private String getDefaultReturnValue(String returnType) {
+        if ("String".equals(returnType)) {
+            return "\"\"";
+        } else if ("boolean".equals(returnType) || "Bool".equals(returnType)) {
+            return "false";
+        } else if ("int".equals(returnType) || "Int".equals(returnType)) {
+            return "0";
+        } else if ("double".equals(returnType) || "Float".equals(returnType)) {
+            return "0.0";
+        } else {
+            return "null";
         }
     }
 

@@ -978,4 +978,37 @@ public List<String> generateImport () {
     public String generateAdviceProceed(String joinPointName) {
         return joinPointName + "->proceed(" + joinPointName + ")";
     }
+
+    // ==================== AOP 织入支持 ====================
+
+    @Override
+    public boolean supportsAOP() {
+        return true;
+    }
+
+    @Override
+    public String generateBeforeAdviceCall(String adviceName, String joinPointName) {
+        return adviceName + "(" + joinPointName + ");";
+    }
+
+    @Override
+    public String generateAfterAdviceCall(String adviceName, String joinPointName) {
+        return adviceName + "(" + joinPointName + ");";
+    }
+
+    @Override
+    public String generateAroundAdviceBegin(String adviceName, String joinPointName) {
+        return adviceName + "(" + joinPointName + ");";
+    }
+
+    @Override
+    public String generateAroundAdviceEnd(String adviceName, String joinPointName, String resultVar) {
+        return adviceName + "(" + joinPointName + ", " + resultVar + ");";
+    }
+
+    @Override
+    public String generateJoinPointCreate(String joinPointName, String methodName,
+                                           String argsExpr, String targetExpr) {
+        return joinPointName + " = join_point_create(\"" + methodName + "\", " + argsExpr + ", 0, " + targetExpr + ");";
+    }
 }
