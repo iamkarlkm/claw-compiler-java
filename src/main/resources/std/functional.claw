@@ -1,0 +1,167 @@
+/**
+ * Claw 标准库 - 函数式编程
+ */
+
+module std.functional {
+    // ==================== 函数组合 ====================
+
+    /**
+     * 函数组合 (f . g)(x) = f(g(x))
+     */
+    function compose<A, B, C>(f: (B) -> C, g: (A) -> B) -> (A) -> C
+
+    /**
+     * 并行组合 (f &&& g)(x) = (f(x), g(x))
+     */
+    function parallel<A, B, C>(f: (A) -> B, g: (A) -> C) -> (A) -> (B, C)
+
+    /**
+     * 或组合 (f ||| g)(x) = f(x) else g(x)
+     */
+    function orElse<A, B>(f: () -> B, g: () -> B) -> () -> B
+
+    // ==================== 函数柯里化 ====================
+
+    /**
+     * 柯里化
+     */
+    function curry<A, B, C>(f: (A, B) -> C) -> (A) -> (B) -> C
+
+    /**
+     * 反柯里化
+     */
+    function uncurry<A, B, C>(f: (A) -> (B) -> C) -> (A, B) -> C
+
+    // ==================== 偏函数 ====================
+
+    /**
+     * 绑定第一个参数
+     */
+    function bindFirst<A, B, C>(f: (A, B) -> C, a: A) -> (B) -> C
+
+    /**
+     * 绑定第二个参数
+     */
+    function bindSecond<A, B, C>(f: (A, B) -> C, b: B) -> (A) -> C
+
+    // ==================== 常用函数 ====================
+
+    /**
+     * 恒等函数
+     */
+    function identity<T>(x: T) -> T
+
+    /**
+     * 常量函数
+     */
+    function constant<T>(x: T) -> () -> T
+
+    /**
+     * 抛出异常
+     */
+    function fail<T>(message: String) -> T
+
+    // ==================== Option 相关 ====================
+
+    /**
+     * Option to Result
+     */
+    function optionToResult<T, E>(opt: Optional<T>, err: E) -> Result<T, E>
+
+    // ==================== Result 相关 ====================
+
+    /**
+     * Result to Option
+     */
+    function resultToOption<T, E>(result: Result<T, E>) -> Optional<T>
+
+    /**
+     * Result to List (Ok -> [x], Err -> [])
+     */
+    function resultToList<T, E>(result: Result<T, E>) -> List<T>
+
+    /**
+     * 选择第一个 Ok
+     */
+    function firstOk<T, E>(results: List<Result<T, E>>) -> Result<T, E>
+
+    /**
+     * 选择第一个 Err
+     */
+    function firstErr<T, E>(results: List<Result<T, E>>) -> Result<T, E>
+}
+
+module std.console {
+    // ==================== 控制台输入输出 ====================
+
+    /**
+     * 打印
+     */
+    function print(message: String) -> Void
+
+    /**
+     * 打印并换行
+     */
+    function println(message: String) -> Void
+
+    /**
+     * 格式化打印
+     */
+    function printf(template: String, args: List<Any>) -> Void
+
+    /**
+     * 读取行
+     */
+    function readLine() -> String
+
+    /**
+     * 读取行（带提示）
+     */
+    function readLine(prompt: String) -> String
+
+    /**
+     * 读取整数
+     */
+    function readInt() -> Optional<Int>
+
+    /**
+     * 读取浮点数
+     */
+    function readFloat() -> Optional<Float>
+}
+
+module std.reflection {
+    // ==================== 类型反射 ====================
+
+    /**
+     * 获取类型名称
+     */
+    function typeName<T>(value: T) -> String
+
+    /**
+     * 获取类型的字段
+     */
+    function fields(type: Type) -> List<FieldInfo>
+
+    /**
+     * 获取类型的方法
+     */
+    function methods(type: Type) -> List<MethodInfo>
+
+    // ==================== 实例反射 ====================
+
+    /**
+     * 获取实例的字段值
+     */
+    function getField<T>(instance: T, name: String) -> Any
+
+    /**
+     * 设置实例的字段值
+     */
+    function setField<T>(instance: T, name: String, value: Any) -> Void
+
+    /**
+     * 调用实例的方法
+     */
+    function callMethod<T>(instance: T, name: String, args: List<Any>) -> Any
+}

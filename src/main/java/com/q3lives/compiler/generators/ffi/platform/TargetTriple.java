@@ -83,10 +83,13 @@ public final class TargetTriple {
         if (parts.length < 2) {
             throw new IllegalArgumentException("Invalid target triple: " + tripleStr);
         }
-        return new TargetTriple(
-            parts[0], parts[1],
-            parts.length > 2 ? parts[2] : null
-        );
+        // 标准 LLVM triple 格式: arch[-vendor]-os[-env]
+        // 例如: x86_64-linux-gnu, x86_64-windows-msvc, aarch64-macos
+        // 第一部分是 architecture, 第二部分是 OS
+        String arch = parts[0];
+        String os = parts[1];
+        String env = parts.length > 2 ? parts[2] : null;
+        return new TargetTriple(os, arch, env);
     }
 
     // 便捷查询

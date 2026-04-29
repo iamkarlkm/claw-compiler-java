@@ -86,7 +86,16 @@ public class Preprocessor {
 
         log.info("预处理完成: {} 行处理完毕", sourceView.getTotalLines());
 
-        return new PreprocessedSource(null,sourceView);
+        // 从 sourceView 重建预处理后的内容
+        StringBuilder contentBuilder = new StringBuilder();
+        for (LineInfo line : sourceView.getLines()) {
+            if (contentBuilder.length() > 0) {
+                contentBuilder.append("\n");
+            }
+            contentBuilder.append(line.getCleanContent() != null ? line.getCleanContent() : line.getRawContent());
+        }
+
+        return new PreprocessedSource(contentBuilder.toString(), sourceView);
     }
 }
 

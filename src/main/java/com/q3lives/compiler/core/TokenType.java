@@ -22,6 +22,8 @@ public enum TokenType {
     KW_CATCH, KW_THROWS, KW_THROW,
     // AOP 关键字
     KW_ASPECT, KW_POINTCUT,
+    // 新语言特性关键字
+    KW_MATCH, KW_CASE, KW_IS, KW_AS, KW_DEFAULT,
 
     // ====== 字面量 ======
     LIT_INTEGER, LIT_FLOAT, LIT_STRING, LIT_CHAR,
@@ -37,6 +39,9 @@ public enum TokenType {
     OP_PLUS_ASSIGN, OP_MINUS_ASSIGN,                       // += -=
     OP_ARROW,                                              // ->
     OP_DOT,                                                // .
+    OP_QUESTION_DOT,                                        // ?.
+    OP_QUESTION_BRACKET,                                      // ?[
+    OP_QUESTION_QUESTION,                                    // ??
     OP_COLON,                                              // :
     OP_COMMA,                                              // ,
     OP_SEMICOLON,                                          // ;
@@ -51,6 +56,10 @@ public enum TokenType {
     DOUBLE_AT_SIGN,  // @@
 
     // ====== 特殊 ======
-    NEWLINE, WHITESPACE, EOF, UNKNOWN
+    NEWLINE, WHITESPACE, EOF, UNKNOWN,
+
+    // Lambda 语法
+    OP_PIPE,  // | 参数 | -> body
+    ARROW,    // -> token
 }
 

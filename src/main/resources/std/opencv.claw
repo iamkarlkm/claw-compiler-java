@@ -1,0 +1,250 @@
+/**
+ * OpenCV FFI 示例 - 计算机视觉库绑定
+ *
+ * 使用方式：
+ * 1. 安装 OpenCV: https://opencv.org/releases/
+ * 2. 配置链接库路径
+ * 3. 编译运行
+ */
+module opencv {
+
+    // ==================== 核心类型 ====================
+
+    extern "C" {
+      // OpenCV 库配置
+      link "opencv_world455"  // 或 opencv_core, opencv_imgproc 等
+      include "opencv2/core.hpp"
+
+      // 图像矩阵 - 核心类型
+      type Mat = OpaquePointer
+
+      // 点和矩形
+      struct Point {
+        x: Int
+        y: Int
+      }
+
+      struct Size {
+        width: Int
+        height: Int
+      }
+
+      struct Rect {
+        x: Int
+        y: Int
+        width: Int
+        height: Int
+      }
+
+      // 标量颜色
+      struct Scalar {
+        v0: Float
+        v1: Float
+        v2: Float
+        v3: Float
+      }
+
+      // 颜色转换常量
+      const COLOR_BGR2GRAY: Int = 6
+      const COLOR_BGR2RGB: Int = 4
+      const COLOR_BGR2HSV: Int = 54
+    }
+
+    // ==================== 图像创建与释放 ====================
+
+    /**
+     * 创建空白图像
+     * @param rows 行数（高度）
+     * @param cols 列数（宽度）
+     * @param type 图像类型（如 CV_8UC3）
+     */
+    function createMat(rows: Int, cols: Int, type: Int) -> Mat
+
+    /**
+     * 使用尺寸创建图像
+     * @param size 尺寸
+     * @param type 图像类型
+     */
+    function createMatWithSize(size: Size, type: Int) -> Mat
+
+    /**
+     * 释放图像内存
+     */
+    function releaseMat(mat: Mat) -> Void
+
+    /**
+     * 克隆图像
+     */
+    function clone(mat: Mat) -> Mat
+
+    // ==================== 图像读写 ====================
+
+    /**
+     * 读取图像文件
+     * @param filename 文件路径
+     */
+    function imread(filename: String) -> Mat
+
+    /**
+     * 保存图像
+     * @param filename 文件路径
+     * @param mat 图像矩阵
+     */
+    function imwrite(filename: String, mat: Mat) -> Bool
+
+    /**
+     * 显示图像（窗口）
+     * @param winname 窗口名称
+     * @param mat 图像矩阵
+     */
+    function imshow(winname: String, mat: Mat) -> Void
+
+    /**
+     * 等待按键
+     * @param delay 延迟毫秒，0 表示无限等待
+     */
+    function waitKey(delay: Int) -> Int
+
+    /**
+     * 销毁所有窗口
+     */
+    function destroyAllWindows() -> Void
+
+    // ==================== 颜色转换 ====================
+
+    /**
+     * 颜色空间转换
+     * @param src 源图像
+     * @param code 转换代码（如 COLOR_BGR2GRAY）
+     */
+    function cvtColor(src: Mat, code: Int) -> Mat
+
+    /**
+     * BGR 转灰度
+     */
+    function toGray(src: Mat) -> Mat {
+      return cvtColor(src, COLOR_BGR2GRAY)
+    }
+
+    /**
+     * BGR 转 HSV
+     */
+    function toHSV(src: Mat) -> Mat {
+      return cvtColor(src, COLOR_BGR2HSV)
+    }
+
+    // ==================== 图像处理 ====================
+
+    /**
+     * 模糊（均值滤波）
+     * @param src 源图像
+     * @param ksize 卷积核大小
+     */
+    function blur(src: Mat, ksize: Int) -> Mat
+
+    /**
+     * 高斯模糊
+     * @param src 源图像
+     * @param ksize 卷积核大小
+     * @param sigma 标准差
+     */
+    function GaussianBlur(src: Mat, ksize: Int, sigma: Float) -> Mat
+
+    /**
+     * Canny 边缘检测
+     * @param image 输入图像
+     * @param threshold1 阈值1
+     * @param threshold2 阈值2
+     */
+    function Canny(image: Mat, threshold1: Int, threshold2: Int) -> Mat
+
+    /**
+     * 阈值处理
+     * @param src 源图像
+     * @param thresh 阈值
+     * @param maxval 最大值
+     * @param type 阈值类型
+     */
+    function threshold(src: Mat, thresh: Float, maxval: Float, type: Int) -> Mat
+
+    // ==================== 绘图 ====================
+
+    /**
+     * 画线
+     * @param img 图像
+     * @param pt1 起点
+     * @param pt2 终点
+     * @param color 颜色
+     * @param thickness 线宽
+     */
+    function line(img: Mat, pt1: Point, pt2: Point, color: Scalar, thickness: Int) -> Void
+
+    /**
+     * 画矩形
+     * @param img 图像
+     * @param rect 矩形区域
+     * @param color 颜色
+     * @param thickness 线宽
+     */
+    function rectangle(img: Mat, rect: Rect, color: Scalar, thickness: Int) -> Void
+
+    /**
+     * 画圆
+     * @param img 图像
+     * @param center 圆心
+     * @param radius 半径
+     * @param color 颜色
+     * @param thickness 线宽
+     */
+    function circle(img: Mat, center: Point, radius: Int, color: Scalar, thickness: Int) -> Void
+
+    /**
+     * 画文字
+     * @param img 图像
+     * @param text 文本
+     * @param org 左上角坐标
+     * @param color 颜色
+     */
+    function putText(img: Mat, text: String, org: Point, color: Scalar) -> Void
+}
+
+// ==================== 使用示例 ====================
+
+function processImage(inputPath: String, outputPath: String) -> Bool {
+    // 读取图像
+    var img = opencv.imread(inputPath)
+
+    // 转灰度
+    var gray = opencv.toGray(img)
+
+    // 边缘检测
+    var edges = opencv.Canny(gray, 50, 150)
+
+    // 保存结果
+    var result = opencv.imwrite(outputPath, edges)
+
+    // 释放内存
+    opencv.releaseMat(img)
+    opencv.releaseMat(gray)
+    opencv.releaseMat(edges)
+
+    return result
+}
+
+function detectEdgesDemo() -> Void {
+    // 创建图像
+    var size = opencv.Size(640, 480)
+    var img = opencv.createMatWithSize(size, 16)  // CV_8UC3
+
+    // 画一个矩形
+    var rect = opencv.Rect(50, 50, 200, 100)
+    var white = opencv.Scalar(255, 255, 255, 0)
+    opencv.rectangle(img, rect, white, 2)
+
+    // 显示
+    opencv.imshow("Demo", img)
+    opencv.waitKey(0)
+    opencv.destroyAllWindows()
+
+    opencv.releaseMat(img)
+}

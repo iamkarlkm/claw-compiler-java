@@ -854,10 +854,139 @@ public class FFIBindingTable {
     }
 
     /**
-     * 获取绑定表的版本号（用于缓存） 简单实现：使用 hashCode 作为版本号
+     * 获取绑定表的版本号（用于缓存）
+     * 简单实现：使用 hashCode 作为版本号
      */
     public long getVersion() {
         return hashCode();
+    }
+
+    // ================================================================
+    //  验证功能
+    // ================================================================
+
+    /**
+     * 验证绑定表的完整性
+     * @return 验证结果（包含错误和警告）
+     */
+    public ValidationResult validate() {
+        ValidationResult result = new ValidationResult();
+
+        // 1. 检查未使用的类型声明
+        Set<String> usedTypes = new HashSet<>();
+        for (ExternFunction func : globalFunctions.values()) {
+            collectUsedTypes(func.returnType, usedTypes);
+            for (ExternParam param : func.params) {
+                collectUsedTypes(param.type, usedTypes);
+            }
+        }
+        for (ExternCallback cb : globalCallbacks) {
+            collectUsedTypes(cb.returnType, usedTypes);
+            for (ExternParam param : cb.params) {
+                collectUsedTypes(param.type, usedTypes);
+            }
+        }
+        for (ExternType type : globalTypes.values()) {
+            if (!usedTypes.contains(type.clawTypeName)) {
+                result.warnings.add("Type '" + type.clawTypeName + "' is declared but not used");
+            }
+        }
+
+        // 2. 检查空链接库
+        for (LinkDirective link : globalLinks) {
+            if (link.libraryName == null || link.libraryName.trim().isEmpty()) {
+                result.errors.add("Link directive has empty library name");
+            }
+        }
+
+        // 3. 检查重复声明
+        checkDuplicates(globalFunctions.keySet(), "function", result);
+        checkDuplicates(globalTypes.keySet(), "type", result);
+        checkDuplicates(globalConstants.keySet(), "constant", result);
+
+        // 4. 检查函数参数类型
+        for (ExternFunction func : globalFunctions.values()) {
+            for (ExternParam param : func.params) {
+                if (!isValidTypeReference(param.type)) {
+                    result.errors.add("Function '" + func.name + "' has invalid parameter type: " + param.type);
+                }
+            }
+            if (!isValidTypeReference(func.returnType)) {
+                result.errors.add("Function '" + func.name + "' has invalid return type: " + func.returnType);
+            }
+        }
+
+        return result;
+    }
+
+    private void collectUsedTypes(String type, Set<String> used) {
+        if (type == null) return;
+        // 提取基础类型
+        int idx = type.indexOf('<');
+        String baseType = idx > 0 ? type.substring(0, idx) : type;
+        used.add(baseType);
+    }
+
+    private boolean isValidTypeReference(String type) {
+        if (type == null) return true;
+        // 提取基础类型名
+        final String baseType;
+        int idx = type.indexOf('<');
+        if (idx > 0) {
+            baseType = type.substring(0, idx);
+        } else {
+            baseType = type;
+        }
+        // 检查是否是已知类型
+        if (globalTypes.containsKey(baseType)) return true;
+        for (ExternStruct s : globalStructs) {
+            if (s.name.equals(baseType)) return true;
+        }
+        for (ExternEnum e : globalEnums) {
+            if (e.name.equals(baseType)) return true;
+        }
+        return isPrimitiveType(baseType);
+    }
+
+    private boolean isPrimitiveType(String type) {
+        // 原始类型
+        if ("Void".equals(type) || "Int".equals(type) || "Float".equals(type)
+            || "String".equals(type) || "Bool".equals(type) || "Pointer".equals(type)
+            || "OpaquePointer".equals(type) || "CString".equals(type)
+            || "FuncPointer".equals(type) || "SizeT".equals(type)
+            || "Any".equals(type)) {
+            return true;
+        }
+        // 泛型容器类型
+        return "Ref".equals(type) || "CArray".equals(type) || "Optional".equals(type)
+            || "Result".equals(type) || "Map".equals(type) || "List".equals(type)
+            || "Set".equals(type) || "Func".equals(type);
+    }
+
+    private void checkDuplicates(Set<String> names, String type, ValidationResult result) {
+        Set<String> seen = new HashSet<>();
+        for (String name : names) {
+            if (seen.contains(name)) {
+                result.errors.add("Duplicate " + type + " declaration: " + name);
+            }
+            seen.add(name);
+        }
+    }
+
+    /**
+     * 验证结果
+     */
+    public static class ValidationResult {
+        public final List<String> errors = new ArrayList<>();
+        public final List<String> warnings = new ArrayList<>();
+
+        public boolean isValid() {
+            return errors.isEmpty();
+        }
+
+        public boolean hasWarnings() {
+            return !warnings.isEmpty();
+        }
     }
 }
 

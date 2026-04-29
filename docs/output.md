@@ -1,0 +1,85 @@
+# Claw Standard Library
+
+## Modules
+
+- **std.functional**
+- **std.console**
+- **std.reflection**
+- **std.string**
+- **std.io**
+- **std.math**
+- **std.time**
+- **std.collection**
+- **std.algorithm**
+- **std.option**
+- **std.result**
+
+## Functions
+
+- **print**(null) -> null
+- **println**(null) -> null
+- **printf**(null) -> null
+- **readLine**(null) -> null
+- **readLine**(null) -> null
+- **readInt**(null) -> null
+- **readFloat**(null) -> null
+- **fields**(null) -> null
+- **methods**(null) -> null
+- **length**(null) -> null
+- **isEmpty**(null) -> null
+- **isBlank**(null) -> null
+- **contains**(null) -> null
+- **indexOf**(null) -> null
+- **replace**(null) -> null
+- **substring**(null) -> null
+- **toUpperCase**(null) -> null
+- **toLowerCase**(null) -> null
+- **capitalize**(null) -> null
+- **trim**(null) -> null
+- **trimStart**(null) -> null
+- **trimEnd**(null) -> null
+- **repeat**(null) -> null
+- **padStart**(null) -> null
+- **padEnd**(null) -> null
+- **split**(null) -> null
+- **join**(null) -> null
+- **toInt**(null) -> null
+- **toFloat**(null) -> null
+- **toBool**(null) -> null
+- **fromInt**(null) -> null
+- **fromFloat**(null) -> null
+- **format**(null) -> null
+- **readFile**(null) -> null
+- **writeFile**(null) -> null
+- **appendFile**(null) -> null
+- **exists**(null) -> null
+- **delete**(null) -> null
+- **copy**(null) -> null
+- **move**(null) -> null
+- **mkdir**(null) -> null
+- **rmdir**(null) -> null
+- **listDir**(null) -> null
+- **abs**(null) -> null
+- **abs**(null) -> null
+- **max**(null) -> null
+- **max**(null) -> null
+- **min**(null) -> null
+- **min**(null) -> null
+- **sign**(null) -> null
+- **pow**(null) -> null
+- **sqrt**(null) -> null
+- **log**(null) -> null
+- **logBase**(null) -> null
+- **sin**(null) -> null
+- **cos**(null) -> null
+- **tan**(null) -> null
+- **randomInt**(null) -> null
+- **randomFloat**(null) -> null
+- **seedRandom**(null) -> null
+- **now**(null) -> null
+- **nowSeconds**(null) -> null
+- **nowDateTime**(null) -> null
+- **date**(null) -> null
+- **dateTime**(null) -> null
+- **toTimestamp**(null) -> null
+- **fromTimestamp**(null) -> null

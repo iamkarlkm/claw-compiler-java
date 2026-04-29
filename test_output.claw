@@ -1,0 +1,54 @@
+/**
+ * opencv - 自动生成的 FFI 绑定
+ * 源文件: test_headers/opencv2/core.hpp
+ */
+
+module opencv {
+
+    extern "C" {
+      // link 和 include 在使用时添加
+      type opencvHandle = OpaquePointer
+
+      const OPENCV_CORE_HPP: Int = 0
+      const CV_VERSION: String = "4.5.5"
+      const CV_VERSION_INT: Int = 4505
+      const CV_8UC1: Int = 0
+      const CV_8UC3: Int = 16
+      const CV_8UC4: Int = 24
+      const CV_32FC1: Int = 5
+      const CV_BGR2GRAY: Int = 6
+      const CV_BGR2RGB: Int = 4
+      const CV_BGR2HSV: Int = 54
+
+      struct Point {
+        x: Int
+        y: Int
+      }
+
+      struct Point2f {
+        x: Float
+        y: Float
+      }
+
+      struct Size {
+        width: Int
+        height: Int
+      }
+
+      struct Rect {
+        x: Int
+        y: Int
+        width: Int
+        height: Int
+      }
+
+      struct Scalar {
+        v0: Float
+        v1: Float
+        v2: Float
+        v3: Float
+      }
+
+    }
+
+}

@@ -147,18 +147,44 @@ public class Parser {
         Token importToken = advance(); // import
         node.setLine(importToken.getLine());
 
+        // 解析: import [type] module [as alias]
+        // 例: import std.io
+        //     import type { foo, bar } from "module"
+        //     import foo as f
+
+        // 可选类型限定: import type, import class, import function
+        if (!isAtEnd() && (peek().getType() == TokenType.KW_TYPE ||
+                          peek().getValue().equals("type") ||
+                          peek().getValue().equals("class") ||
+                          peek().getValue().equals("function"))) {
+            node.setAttribute("importType", advance().getValue());
+        }
+
+        // 模块路径
         StringBuilder path = new StringBuilder();
         while (!isAtEnd() && peek().getLine() == importToken.getLine()) {
+            String val = peek().getValue();
+            if ("from".equals(val) || "as".equals(val)) break;
             path.append(advance().getValue());
+            if (peek().getType() == TokenType.OP_DOT) {
+                path.append(advance().getValue()); // .
+            }
         }
         node.setAttribute("path", path.toString().trim());
+
+        // as 别名
+        if (!isAtEnd() && "as".equals(peek().getValue())) {
+            advance(); // as
+            node.setAttribute("alias", advance().getValue());
+        }
+
         return node;
     }
 
     private ASTNode parseFunction() {
         ASTNode node = new ASTNode(ASTNode.NodeType.FUNCTION_DECLARATION);
 
-        // 修饰符
+        // 修饰符 - flowType 默认 normal（可省略）
         while (!isAtEnd()) {
             Token t = peek();
             if (t.getType() == TokenType.KW_NORMAL) { node.setAttribute("flowType", "normal"); advance(); }
@@ -167,6 +193,11 @@ public class Parser {
             else if (t.getType() == TokenType.KW_PUBLIC) { node.setAttribute("visibility", "public"); advance(); }
             else if (t.getType() == TokenType.KW_PRIVATE) { node.setAttribute("visibility", "private"); advance(); }
             else break;
+        }
+
+        // 默认 flowType 为 normal（无需写 normal 关键字）
+        if (node.getAttribute("flowType") == null) {
+            node.setAttribute("flowType", "normal");
         }
 
         // function 关键字
@@ -337,6 +368,7 @@ public class Parser {
             case KW_IF -> parseIfStatement();
             case KW_FOR -> parseForStatement();
             case KW_WHILE -> parseWhileStatement();
+            case KW_MATCH -> parseMatchExpression();
             case KW_BREAK -> { advance(); yield new ASTNode(ASTNode.NodeType.BREAK_STATEMENT); }
             case KW_CONTINUE -> { advance(); yield new ASTNode(ASTNode.NodeType.CONTINUE_STATEMENT); }
             case KW_THROW -> parseThrowStatement();
@@ -451,6 +483,50 @@ public class Parser {
         return node;
     }
 
+    /** 解析 match 表达式：match x { case A -> ... case B -> ... } */
+    private ASTNode parseMatchExpression() {
+        ASTNode node = new ASTNode(ASTNode.NodeType.MATCH_EXPRESSION);
+        Token matchToken = advance();
+        node.setLine(matchToken.getLine());
+
+        // 解析匹配目标
+        if (!isAtEnd() && peek().getType() != TokenType.OPEN_BRACE) {
+            node.addChild(parseExpression());
+        }
+
+        // 解析 case 块
+        if (!isAtEnd() && peek().getType() == TokenType.OPEN_BRACE) {
+            advance(); // {
+            while (!isAtEnd() && peek().getType() != TokenType.CLOSE_BRACE) {
+                if (peek().getType() == TokenType.KW_CASE) {
+                    ASTNode caseNode = new ASTNode(ASTNode.NodeType.PATTERN_MATCH);
+                    advance(); // case
+                    // 模式
+                    caseNode.addChild(parseExpression());
+                    // -> 值
+                    if (!isAtEnd() && peek().getType() == TokenType.OP_ARROW) {
+                        advance(); // ->
+                        caseNode.addChild(parseExpression());
+                    }
+                    node.addChild(caseNode);
+                } else if (peek().getType() == TokenType.KW_DEFAULT) {
+                    ASTNode defaultNode = new ASTNode(ASTNode.NodeType.PATTERN_MATCH);
+                    advance(); // default
+                    if (!isAtEnd() && peek().getType() == TokenType.OP_ARROW) {
+                        advance(); // ->
+                        defaultNode.addChild(parseExpression());
+                    }
+                    node.addChild(defaultNode);
+                } else {
+                    advance(); // 跳过
+                }
+            }
+            if (!isAtEnd()) advance(); // }
+        }
+
+        return node;
+    }
+
     private ASTNode parseExpressionStatement() {
         ASTNode expr = parseExpression();
         if (expr != null) {
@@ -493,6 +569,17 @@ public class Parser {
                 return access;
             }
 
+            // 可选链：?.
+            if (!isAtEnd() && peek().getType() == TokenType.OP_QUESTION_DOT) {
+                ASTNode access = new ASTNode(ASTNode.NodeType.OPTIONAL_CHAIN);
+                access.setLine(t.getLine());
+                access.addChild(node);
+                advance(); // ?.
+                ASTNode member = parseExpression();
+                if (member != null) access.addChild(member);
+                return access;
+            }
+
             // 赋值
             if (!isAtEnd() && peek().getType() == TokenType.OP_ASSIGN) {
                 ASTNode assign = new ASTNode(ASTNode.NodeType.ASSIGNMENT);
@@ -505,6 +592,12 @@ public class Parser {
             }
 
             return node;
+        }
+
+        // Lambda 表达式: (x) -> x + 1 或 x -> x + 1
+        if (t.getType() == TokenType.OPEN_PAREN || t.getType() == TokenType.IDENTIFIER) {
+            ASTNode lambda = tryParseLambda();
+            if (lambda != null) return lambda;
         }
 
         if (t.isLiteral()) {
@@ -522,6 +615,77 @@ public class Parser {
             return node;
         }
 
+        return null;
+    }
+
+    /**
+     * 尝试解析 Lambda 表达式
+     * 语法:
+     * 1. (x, y) -> x + y    // 多参数
+     * 2. x: x + 1           // 单参数冒号语法
+     */
+    private ASTNode tryParseLambda() {
+        // 保存当前位置，如果解析失败可以回退
+        int savedPos = pos;
+        Token first = peek();
+
+        // 情况1: (params) -> body
+        if (first.getType() == TokenType.OPEN_PAREN) {
+            ASTNode params = new ASTNode(ASTNode.NodeType.PARAMETER_LIST);
+            advance(); // (
+
+            // 解析参数列表
+            while (!isAtEnd() && peek().getType() != TokenType.CLOSE_PAREN) {
+                if (peek().getType() == TokenType.IDENTIFIER) {
+                    ASTNode param = new ASTNode(ASTNode.NodeType.PARAMETER);
+                    param.setAttribute("name", advance().getValue());
+                    params.addChild(param);
+                }
+                if (peek().getType() == TokenType.OP_COMMA) {
+                    advance(); // ,
+                }
+            }
+            if (!isAtEnd()) advance(); // )
+
+            // ->
+            if (!isAtEnd() && "->".equals(peek().getValue())) {
+                advance(); // ->
+                ASTNode body = parseExpression();
+                if (body != null) {
+                    ASTNode lambda = new ASTNode(ASTNode.NodeType.LAMBDA_EXPRESSION);
+                    lambda.addChild(params);
+                    lambda.addChild(body);
+                    return lambda;
+                }
+            }
+        }
+
+        // 情况2: x: body (单参数冒号语法)
+        pos = savedPos;
+        if (first.getType() == TokenType.IDENTIFIER) {
+            String paramName = first.getValue();
+            advance(); // x
+
+            // 检查冒号
+            if (!isAtEnd() && peek().getType() == TokenType.OP_COLON) {
+                advance(); // :
+                ASTNode body = parseExpression();
+                if (body != null) {
+                    ASTNode params = new ASTNode(ASTNode.NodeType.PARAMETER_LIST);
+                    ASTNode param = new ASTNode(ASTNode.NodeType.PARAMETER);
+                    param.setAttribute("name", paramName);
+                    params.addChild(param);
+
+                    ASTNode lambda = new ASTNode(ASTNode.NodeType.LAMBDA_EXPRESSION);
+                    lambda.addChild(params);
+                    lambda.addChild(body);
+                    return lambda;
+                }
+            }
+        }
+
+        // 回退
+        pos = savedPos;
         return null;
     }
 
@@ -581,6 +745,7 @@ public class Parser {
 
     /**
      * 解析可选的泛型类型参数列表 <T, U>，将结果写入节点的 typeParams 属性。
+     * 支持类型边界：<T: Comparable, U: Number>
      */
     private void parseTypeParameters(ASTNode node) {
         if (isAtEnd() || peek().getType() != TokenType.OP_LESS) {
@@ -588,12 +753,33 @@ public class Parser {
         }
         advance(); // <
         StringBuilder sb = new StringBuilder();
+        StringBuilder bounds = new StringBuilder();
+        boolean inBounds = false;
+
         while (!isAtEnd() && peek().getType() != TokenType.OP_GREATER) {
-            if (peek().getType() == TokenType.IDENTIFIER) {
-                if (sb.length() > 0) sb.append(",");
+            TokenType tt = peek().getType();
+            if (tt == TokenType.IDENTIFIER) {
+                if (sb.length() > 0) {
+                    sb.append(",");
+                    if (inBounds) bounds.append(",");
+                }
                 sb.append(advance().getValue());
-            } else if (peek().getType() == TokenType.OP_COMMA) {
-                advance(); // 跳过逗号
+            } else if (tt == TokenType.OP_COLON) {
+                advance(); // :
+                inBounds = true;
+                // 解析边界类型
+                while (!isAtEnd() && peek().getType() != TokenType.OP_COMMA
+                        && peek().getType() != TokenType.OP_GREATER) {
+                    if (peek().getType() == TokenType.IDENTIFIER) {
+                        if (bounds.length() > 0) bounds.append("&");
+                        bounds.append(advance().getValue());
+                    } else {
+                        advance(); // 跳过
+                    }
+                }
+            } else if (tt == TokenType.OP_COMMA) {
+                advance(); // ,
+                inBounds = false;
             } else {
                 advance(); // 跳过未知 token
             }
@@ -601,6 +787,9 @@ public class Parser {
         if (!isAtEnd()) advance(); // >
         if (sb.length() > 0) {
             node.setAttribute("typeParams", sb.toString());
+            if (bounds.length() > 0) {
+                node.setAttribute("typeBounds", bounds.toString());
+            }
         }
     }
 

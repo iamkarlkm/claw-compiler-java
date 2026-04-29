@@ -60,7 +60,15 @@ public class ASTNode {
         // 操作流
         FLOW_STATEMENT, IDENTIFIER, LITERAL,AOP_ASPECT,AOP_ADVICE,
         // 泛型
-        GENERIC_TYPE
+        GENERIC_TYPE,
+        // Lambda/匿名函数
+        LAMBDA_EXPRESSION,
+        // 类型约束
+        TYPE_BOUND,
+        // 表达式
+        MATCH_EXPRESSION, OPTIONAL_CHAIN, NULL_COALESCE,
+        // 类型检查
+        TYPE_CAST, TYPE_GUARD, PATTERN_MATCH
     }
 
     private final NodeType type;

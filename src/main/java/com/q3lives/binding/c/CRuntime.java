@@ -46,6 +46,10 @@ public class CRuntime implements TargetRuntime {
     @Override
     public String mapType(String clawType) {
         if (clawType == null) return "void*";
+        // 泛型类型映射：C 后端需要特化为具体 struct
+        if (clawType.contains("<") && clawType.contains(">")) {
+            return mapGenericType(clawType);
+        }
         switch (clawType) {
             case "Int":    return "int";
             case "Float":  return "double";
@@ -55,6 +59,50 @@ public class CRuntime implements TargetRuntime {
             case "Any":    return "void*";
             default:       return clawType + "*"; // 自定义类型映射为指针
         }
+    }
+
+    /** 映射泛型类型：为泛型容器生成特化 struct */
+    private String mapGenericType(String clawType) {
+        int start = clawType.indexOf('<');
+        int end = clawType.lastIndexOf('>');
+        String baseType = clawType.substring(0, start);
+        String typeParams = clawType.substring(start + 1, end);
+
+        // C 后端使用 void* 加上元数据
+        return switch (baseType) {
+            case "Array", "CArray", "List" -> "void*"; // C 数组用 void* 加 size
+            case "Map" -> "void*"; // C map 用 hash table
+            case "Set" -> "void*"; // C set 用 hash table
+            case "Optional" -> {
+                // Optional<T> 映射为包含有效标记的 struct
+                yield "void*";
+            }
+            case "Result" -> "void*"; // Result 映射为包含状态的结构
+            default -> "void*"; // 默认用 void*
+        };
+    }
+
+    /** 检查是否是泛型类型 */
+    public boolean isGenericType(String clawType) {
+        return clawType != null && clawType.contains("<") && clawType.contains(">");
+    }
+
+    /** 提取泛型基础类型：Array<Int> -> Array */
+    public String extractGenericBase(String clawType) {
+        if (clawType == null) return null;
+        int idx = clawType.indexOf('<');
+        return idx > 0 ? clawType.substring(0, idx) : clawType;
+    }
+
+    /** 提取泛型类型参数：Array<Int> -> Int */
+    public String extractGenericParam(String clawType) {
+        if (clawType == null) return null;
+        int start = clawType.indexOf('<');
+        int end = clawType.lastIndexOf('>');
+        if (start > 0 && end > start) {
+            return clawType.substring(start + 1, end);
+        }
+        return null;
     }
 
     /**

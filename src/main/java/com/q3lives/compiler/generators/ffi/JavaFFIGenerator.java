@@ -38,6 +38,9 @@ public class JavaFFIGenerator {
         StringBuilder sb = new StringBuilder();
         sb.append(generatePackageAndImports());
         sb.append(generateClassHeader());
+        sb.append(generateStructDefinitions());
+        sb.append(generateEnumDefinitions());
+        sb.append(generateCallbackDefinitions());
         sb.append(generateLibraryLoading());
         sb.append(generateConstants());
         sb.append(generateMethodHandles());
@@ -360,6 +363,105 @@ public class JavaFFIGenerator {
             case "String":  return "String";
             default:        return "int";
         }
+    }
+
+    // ================================================================
+    //  Struct 定义生成
+    // ================================================================
+
+    /**
+     * 生成 Java 类表示 C struct
+     */
+    public String generateStructDefinitions() {
+        if (bindingTable.getAllStructs().isEmpty()) {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("\n    /* ========== Struct Definitions ========== */\n");
+
+        for (ExternStruct struct : bindingTable.getAllStructs()) {
+            sb.append(generateStructClass(struct));
+        }
+
+        return sb.toString();
+    }
+
+    private String generateStructClass(ExternStruct struct) {
+        StringBuilder sb = new StringBuilder();
+        int size = struct.estimateSize();
+        int alignment = struct.alignment > 0 ? struct.alignment : 8;
+
+        sb.append("    /** C struct: ").append(struct.name).append(" */\n");
+        sb.append("    public static final class ").append(struct.name).append(" {\n");
+
+        for (StructField field : struct.fields) {
+            sb.append("        public ").append(mapToJavaType(field.type))
+              .append(" ").append(field.name).append(";\n");
+        }
+
+        sb.append("    }\n\n");
+        return sb.toString();
+    }
+
+    // ================================================================
+    //  Enum 定义生成
+    // ================================================================
+
+    /**
+     * 生成 Java 枚举表示 C enum
+     */
+    public String generateEnumDefinitions() {
+        if (bindingTable.getAllEnums().isEmpty()) {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("\n    /* ========== Enum Definitions ========== */\n");
+
+        for (ExternEnum enumType : bindingTable.getAllEnums()) {
+            sb.append("    public enum ").append(enumType.name).append(" {\n");
+            for (int i = 0; i < enumType.members.size(); i++) {
+                EnumMember member = enumType.members.get(i);
+                sb.append("        ").append(member.name);
+                if (i < enumType.members.size() - 1) sb.append(",");
+                sb.append("\n");
+            }
+            sb.append("    }\n\n");
+        }
+
+        return sb.toString();
+    }
+
+    // ================================================================
+    //  Callback 定义生成
+    // ================================================================
+
+    /**
+     * 生成 Java 函数接口表示 C callback
+     */
+    public String generateCallbackDefinitions() {
+        if (bindingTable.getAllCallbacks().isEmpty()) {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("\n    /* ========== Callback Definitions ========== */\n");
+
+        for (ExternCallback callback : bindingTable.getAllCallbacks()) {
+            sb.append("    @FunctionalInterface\n");
+            sb.append("    public interface ").append(callback.name).append(" {\n");
+            sb.append("        ").append(mapToJavaType(callback.returnType)).append(" invoke(");
+
+            for (int i = 0; i < callback.params.size(); i++) {
+                if (i > 0) sb.append(", ");
+                sb.append(mapToJavaType(callback.params.get(i).type))
+                  .append(" ").append(callback.params.get(i).name);
+            }
+            sb.append(");\n    }\n\n");
+        }
+
+        return sb.toString();
     }
 
     // ================================================================

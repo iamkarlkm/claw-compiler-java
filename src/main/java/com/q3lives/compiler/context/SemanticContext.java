@@ -99,6 +99,40 @@ public class SemanticContext {
         }
     }
 
+    // ==================== 模块导入 ====================
+
+    /**
+     * 模块导入信息
+     */
+    public static class ModuleImport {
+        public enum ImportType { MODULE, TYPE, CLASS, FUNCTION }
+
+        private final String modulePath;
+        private final String alias;
+        private final ImportType importType;
+        private final Set<String> exportedSymbols;  // 导出的符号
+        private final boolean isLoaded;
+
+        public ModuleImport(String modulePath) {
+            this(modulePath, null, ImportType.MODULE, null, false);
+        }
+
+        public ModuleImport(String modulePath, String alias, ImportType importType,
+                       Set<String> exportedSymbols, boolean isLoaded) {
+            this.modulePath = modulePath;
+            this.alias = alias;
+            this.importType = importType;
+            this.exportedSymbols = exportedSymbols != null ? exportedSymbols : new HashSet<>();
+            this.isLoaded = isLoaded;
+        }
+
+        public String getModulePath() { return modulePath; }
+        public String getAlias() { return alias; }
+        public ImportType getImportType() { return importType; }
+        public Set<String> getExportedSymbols() { return Collections.unmodifiableSet(exportedSymbols); }
+        public boolean isLoaded() { return isLoaded; }
+    }
+
     // ==================== 函数签名 ====================
 
     /**
@@ -365,6 +399,9 @@ public class SemanticContext {
     // 运算符注册表（运算符处理器输出）
     private final Map<String, OperatorInfo> operatorRegistry;
 
+    // 导入的模块信息
+    private final List<ModuleImport> importedModules;
+
     // 错误收集
     private final List<SemanticError> errors;
 
@@ -375,6 +412,7 @@ public class SemanticContext {
         this.controlFlows = new ArrayList<>();
         this.literals = new ArrayList<>();
         this.operatorRegistry = new LinkedHashMap<>();
+        this.importedModules = new ArrayList<>();
         this.errors = new ArrayList<>();
 
         // 注册内置原始类型
@@ -539,24 +577,91 @@ public class SemanticContext {
         private final Severity severity;
         private final String message;
         private final int line;
+        private final int column;
         private final String context;
+        private final String sourceCode;
+        private final String suggestion;
+        private final String errorCode;
 
         public SemanticError(Severity severity, String message, int line, String context) {
             this.severity = severity;
             this.message = message;
             this.line = line;
+            this.column = -1;
             this.context = context;
+            this.sourceCode = null;
+            this.suggestion = null;
+            this.errorCode = null;
+        }
+
+        public SemanticError(Severity severity, String message, int line, int column,
+                          String context, String sourceCode, String suggestion, String errorCode) {
+            this.severity = severity;
+            this.message = message;
+            this.line = line;
+            this.column = column;
+            this.context = context;
+            this.sourceCode = sourceCode;
+            this.suggestion = suggestion;
+            this.errorCode = errorCode;
         }
 
         public Severity getSeverity() { return severity; }
         public String getMessage() { return message; }
         public int getLine() { return line; }
+        public int getColumn() { return column; }
         public String getContext() { return context; }
+        public String getSourceCode() { return sourceCode; }
+        public String getSuggestion() { return suggestion; }
+        public String getErrorCode() { return errorCode; }
 
         @Override
         public String toString() {
-            return "[" + severity + "] Line " + line + ": " + message +
-                   (context != null ? " (in " + context + ")" : "");
+            StringBuilder sb = new StringBuilder();
+            if (errorCode != null) sb.append("[").append(errorCode).append("] ");
+            sb.append(severity).append(" at line ").append(line);
+            if (column > 0) sb.append(", column ").append(column);
+            sb.append(": ").append(message);
+            if (suggestion != null) sb.append("\n  Suggestion: ").append(suggestion);
+            if (sourceCode != null && !sourceCode.isEmpty()) sb.append("\n  --> ").append(sourceCode);
+            return sb.toString();
+        }
+
+        // 便捷工厂方法
+        public static SemanticError typeNotFound(String typeName, int line, int column) {
+            return new SemanticError(Severity.ERROR,
+                "Type '" + typeName + "' not found",
+                line, column, null, null,
+                "Declare type using: type " + typeName + " = ...",
+                "E1001");
+        }
+
+        public static SemanticError undefinedVariable(String varName, int line, int column) {
+            return new SemanticError(Severity.ERROR,
+                "Undefined variable: '" + varName + "'",
+                line, column, null, null,
+                "Declare variable using: var " + varName + " = ... or const " + varName + " = ...",
+                "E1002");
+        }
+
+        public static SemanticError functionNotFound(String funcName, int line, int column) {
+            return new SemanticError(Severity.ERROR,
+                "Function '" + funcName + "' not found",
+                line, column, null, null,
+                "Define function or import from module",
+                "E1003");
+        }
+
+        public static SemanticError typeMismatch(String expected, String actual, int line, int column) {
+            return new SemanticError(Severity.ERROR,
+                "Type mismatch: expected '" + expected + "' but found '" + actual + "'",
+                line, column, null, null,
+                "Cast or convert the value: value as " + expected,
+                "E2001");
+        }
+
+        public static SemanticError warning(String message, int line) {
+            return new SemanticError(Severity.WARNING, message, line, -1, null, null, null, "W0001");
         }
     }
 
@@ -565,11 +670,26 @@ public class SemanticContext {
     }
 
     public void addError(SemanticError.Severity severity, String message, int line, String context) {
-        errors.add(new SemanticError(severity, message, line, context));
+        errors.add(new SemanticError(severity, message, line, -1, context, null, null, null));
     }
 
     public List<SemanticError> getErrors() {
         return Collections.unmodifiableList(errors);
+    }
+
+    // ==================== 模块导入管理 ====================
+
+    public void addImport(ModuleImport importInfo) {
+        importedModules.add(importInfo);
+    }
+
+    public List<ModuleImport> getImportedModules() {
+        return Collections.unmodifiableList(importedModules);
+    }
+
+    public boolean hasImportedModule(String modulePath) {
+        return importedModules.stream()
+            .anyMatch(m -> m.getModulePath().equals(modulePath));
     }
 
     public boolean hasErrors() {

@@ -110,6 +110,24 @@ public class TypeChecker {
                 return checkAspect(node, env);
             case AOP_ADVICE:
                 return checkAdvice(node, env);
+            case ARRAY_LITERAL:
+                return checkArrayLiteral(node, env);
+            case MEMBER_ACCESS:
+                return checkMemberAccess(node, env);
+            case MATCH_EXPRESSION:
+                return checkMatchExpression(node, env);
+            case OPTIONAL_CHAIN:
+                return checkOptionalChain(node, env);
+            case NULL_COALESCE:
+                return checkNullCoalesce(node, env);
+            case LAMBDA_EXPRESSION:
+                return checkLambdaExpression(node, env);
+            case TYPE_CAST:
+                return checkTypeCast(node, env);
+            case TYPE_GUARD:
+                return checkTypeGuard(node, env);
+            case PATTERN_MATCH:
+                return checkPatternMatch(node, env);
             default:
                 // 递归检查子节点
                 for (ASTNode child : node.getChildren()) {
@@ -135,11 +153,19 @@ public class TypeChecker {
         // 创建函数作用域
         TypeEnvironment funcEnv = env.createChild();
 
-        // 注册泛型类型参数
+        // 注册泛型类型参数和处理边界约束
         String typeParams = node.getProperty("typeParams");
         if (typeParams != null && !typeParams.isEmpty()) {
+            String typeBounds = node.getProperty("typeBounds");
+            Map<String, String> boundMap = parseTypeBounds(typeBounds);
+
             for (String tp : typeParams.split(",")) {
-                funcEnv.defineType(tp.trim());
+                String typeParam = tp.trim();
+                funcEnv.defineType(typeParam);
+                // 如果有边界约束，记录到环境
+                if (boundMap.containsKey(typeParam)) {
+                    funcEnv.addTypeBound(typeParam, boundMap.get(typeParam));
+                }
             }
         }
 
@@ -377,6 +403,16 @@ public class TypeChecker {
             }
         }
 
+        // 泛型函数类型参数推断：identity<Int>(x) 调用后推断返回类型
+        if (returnType != null && returnType.contains("<T>")) {
+            String typeArgs = node.getProperty("typeArgs");
+            if (typeArgs != null && !typeArgs.isEmpty()) {
+                // 替换返回值中的 T 为具体类型
+                returnType = returnType.replace("T", typeArgs);
+                log.debug("推断泛型函数 '{}' 返回类型为: {}", funcName, returnType);
+            }
+        }
+
         return returnType;
     }
 
@@ -460,6 +496,11 @@ public class TypeChecker {
         String value = node.getValue();
         if (value == null) return "Any";
 
+        // 空数组推断 [] -> CArray<Any>
+        if ("[]".equals(value)) {
+            return "CArray<Any>";
+        }
+
         if ("true".equals(value) || "false".equals(value)) {
             return "Bool";
         }
@@ -539,6 +580,198 @@ public class TypeChecker {
         return "Void";
     }
 
+    /** 检查数组字面量 */
+    private String checkArrayLiteral(ASTNode node, TypeEnvironment env) {
+        if (node.getChildren().isEmpty()) {
+            return "CArray<Any>"; // 空数组
+        }
+
+        // 收集元素类型并统一
+        List<String> elementTypes = new ArrayList<>();
+        for (ASTNode elem : node.getChildren()) {
+            elementTypes.add(checkNode(elem, env));
+        }
+
+        // 统一元素类型
+        String unifiedType = unifyElementTypes(elementTypes);
+        return "CArray<" + unifiedType + ">";
+    }
+
+    /** 统一数组元素类型：[1, 2.0] -> CArray<Float> */
+    private String unifyElementTypes(List<String> types) {
+        if (types.isEmpty()) return "Any";
+
+        String unified = types.get(0);
+        for (int i = 1; i < types.size(); i++) {
+            unified = unifyTypes(unified, types.get(i));
+            if ("Any".equals(unified)) break;
+        }
+        return unified;
+    }
+
+    /** 检查成员访问 */
+    private String checkMemberAccess(ASTNode node, TypeEnvironment env) {
+        // base.member - 推断成员类型
+        if (node.getChildren().size() >= 2) {
+            String baseType = checkNode(node.getChildren().get(0), env);
+            String memberName = node.getProperty("member");
+
+            // 根据基础类型推断成员类型
+            return inferMemberType(baseType, memberName);
+        }
+        return "Any";
+    }
+
+    /** 推断成员类型 */
+    private String inferMemberType(String baseType, String member) {
+        if (member == null) return "Any";
+
+        // Map<String, T> 的 get 返回 T
+        if (baseType != null && (baseType.startsWith("Map<") || baseType.startsWith("CArray<"))) {
+            int start = baseType.indexOf('<');
+            int end = baseType.lastIndexOf('>');
+            if (start > 0 && end > start) {
+                String innerTypes = baseType.substring(start + 1, end);
+                if (baseType.startsWith("Map<")) {
+                    // Map<K, V> -> get 返回 V (第二个类型参数)
+                    String[] parts = innerTypes.split(",");
+                    return parts.length > 1 ? parts[1].trim() : "Any";
+                } else {
+                    // CArray<T> -> get 返回 T
+                    return innerTypes.trim();
+                }
+            }
+        }
+
+        // 字符串成员
+        if ("String".equals(baseType)) {
+            return switch (member) {
+                case "length", "size" -> "Int";
+                case "isEmpty" -> "Bool";
+                case "toUpperCase", "toLowerCase", "trim" -> "String";
+                default -> "Any";
+            };
+        }
+
+        // 数组成员
+        if (baseType != null && (baseType.startsWith("CArray<") || baseType.startsWith("Array<"))) {
+            return switch (member) {
+                case "length", "size" -> "Int";
+                case "isEmpty" -> "Bool";
+                default -> "Any";
+            };
+        }
+
+        return "Any";
+    }
+
+    /** 检查 match 表达式：match x { case A -> ... case B -> ... } */
+    private String checkMatchExpression(ASTNode node, TypeEnvironment env) {
+        if (node.getChildren().isEmpty()) {
+            return "Any";
+        }
+        // 收集所有 case 的返回类型，统一
+        List<String> caseTypes = new ArrayList<>();
+        for (ASTNode caseNode : node.getChildren()) {
+            caseTypes.add(checkNode(caseNode, env));
+        }
+        return unifyElementTypes(caseTypes);
+    }
+
+    /** 检查可选链：obj?.field */
+    private String checkOptionalChain(ASTNode node, TypeEnvironment env) {
+        // obj?.field => Optional<T> 类型
+        if (node.getChildren().size() >= 1) {
+            String baseType = checkNode(node.getChildren().get(0), env);
+            if (baseType.startsWith("Optional<")) {
+                // 提取内部类型，包装为 Optional
+                int start = baseType.indexOf('<');
+                int end = baseType.lastIndexOf('>');
+                if (start > 0 && end > start) {
+                    String innerType = baseType.substring(start + 1, end);
+                    return "Optional<" + innerType + ">";
+                }
+            }
+            return "Optional<" + baseType + ">";
+        }
+        return "Optional<Any>";
+    }
+
+    /** 检查空值合并：x ?? default */
+    private String checkNullCoalesce(ASTNode node, TypeEnvironment env) {
+        if (node.getChildren().size() >= 2) {
+            String leftType = checkNode(node.getChildren().get(0), env);
+            String rightType = checkNode(node.getChildren().get(1), env);
+            // 统一类型，取更具体的那个
+            return unifyTypes(leftType, rightType);
+        }
+        return "Any";
+    }
+
+    /** 检查 Lambda 表达式：|x| -> x + 1 */
+    private String checkLambdaExpression(ASTNode node, TypeEnvironment env) {
+        // Lambda 类型格式：(T1, T2) -> R
+        // 检查参数和返回值
+        TypeEnvironment lambdaEnv = env.createChild();
+
+        ASTNode params = node.getChildByType(ASTNode.NodeType.PARAMETER_LIST);
+        List<String> paramTypes = new ArrayList<>();
+        if (params != null) {
+            for (ASTNode param : params.getChildren()) {
+                String paramType = param.getProperty("type");
+                if (paramType == null) paramType = "Any";
+                paramTypes.add(paramType);
+            }
+        }
+
+        String bodyType = "Void";
+        ASTNode body = node.getChildByType(ASTNode.NodeType.BLOCK);
+        if (body != null) {
+            bodyType = checkNode(body, lambdaEnv);
+        }
+
+        // 构造函数类型
+        String paramStr = String.join(", ", paramTypes);
+        return "(" + paramStr + ") -> " + bodyType;
+    }
+
+    /** 检查类型转换：x as String */
+    private String checkTypeCast(ASTNode node, TypeEnvironment env) {
+        if (node.getChildren().size() >= 2) {
+            // 检查源类型
+            checkNode(node.getChildren().get(0), env);
+            // 目标类型在属性中
+            String targetType = node.getProperty("targetType");
+            if (targetType != null) {
+                return targetType;
+            }
+        }
+        return "Any";
+    }
+
+    /** 检查类型守卫：x is String */
+    private String checkTypeGuard(ASTNode node, TypeEnvironment env) {
+        if (node.getChildren().size() >= 1) {
+            checkNode(node.getChildren().get(0), env);
+        }
+        // 类型守卫返回 Bool
+        return "Bool";
+    }
+
+    /** 检查模式匹配：match { case String -> ... case Int -> ... } */
+    private String checkPatternMatch(ASTNode node, TypeEnvironment env) {
+        // 类似于 switch，返回所有 case 的统一类型
+        if (node.getChildren().isEmpty()) {
+            return "Any";
+        }
+
+        List<String> caseTypes = new ArrayList<>();
+        for (ASTNode caseNode : node.getChildren()) {
+            caseTypes.add(checkNode(caseNode, env));
+        }
+        return unifyElementTypes(caseTypes);
+    }
+
     /**
      * 推断二元运算结果类型
      */
@@ -569,6 +802,62 @@ public class TypeChecker {
             return "Int";
         }
 
+        // 泛型容器类型提升：CArray<Int> + CArray<Float> -> CArray<Float>
+        if ("+".equals(operator) && left.startsWith("CArray<") && right.startsWith("CArray<")) {
+            String innerLeft = extractInnerType(left);
+            String innerRight = extractInnerType(right);
+            if (innerLeft != null && innerRight != null) {
+                String unified = unifyTypes(innerLeft, innerRight);
+                return "CArray<" + unified + ">";
+            }
+        }
+
+        // List 类型提升
+        if ("+".equals(operator) && left.startsWith("List<") && right.startsWith("List<")) {
+            String innerLeft = extractInnerType(left);
+            String innerRight = extractInnerType(right);
+            if (innerLeft != null && innerRight != null) {
+                String unified = unifyTypes(innerLeft, innerRight);
+                return "List<" + unified + ">";
+            }
+        }
+
+        return "Any";
+    }
+
+    /** 提取泛型内部类型：CArray<Int> -> Int */
+    private String extractInnerType(String genericType) {
+        if (genericType == null) return null;
+        int start = genericType.indexOf('<');
+        int end = genericType.lastIndexOf('>');
+        if (start > 0 && end > start) {
+            return genericType.substring(start + 1, end);
+        }
+        return null;
+    }
+
+    /** 解析类型边界字符串：T:Comparable&U:Number -> {T: Comparable, U: Number} */
+    private Map<String, String> parseTypeBounds(String boundsStr) {
+        Map<String, String> result = new HashMap<>();
+        if (boundsStr == null || boundsStr.isEmpty()) return result;
+
+        // 解析格式：T:Comparable&U:Number
+        String[] parts = boundsStr.split("&");
+        for (String part : parts) {
+            String[] kv = part.split(":");
+            if (kv.length == 2) {
+                result.put(kv[0].trim(), kv[1].trim());
+            }
+        }
+        return result;
+    }
+
+    /** 统一两个类型：Int+Float -> Float */
+    private String unifyTypes(String a, String b) {
+        if (a.equals(b)) return a;
+        if ("Int".equals(a) && "Float".equals(b)) return "Float";
+        if ("Float".equals(a) && "Int".equals(b)) return "Float";
+        if ("Any".equals(a) || "Any".equals(b)) return "Any";
         return "Any";
     }
 
@@ -631,6 +920,7 @@ public class TypeChecker {
         private final Map<String, String> functions = new HashMap<>();
         private final Set<String> constVars = new HashSet<>();
         private final Set<String> definedTypes = new HashSet<>();
+        private final Map<String, String> typeBounds = new HashMap<>(); // 类型参数的边界约束
         private String expectedReturnType;
 
         TypeEnvironment() {
@@ -646,6 +936,8 @@ public class TypeChecker {
         TypeEnvironment createChild() {
             TypeEnvironment child = new TypeEnvironment(this);
             child.expectedReturnType = this.expectedReturnType;
+            // 继承类型边界约束
+            child.typeBounds.putAll(this.typeBounds);
             return child;
         }
 
@@ -655,6 +947,35 @@ public class TypeChecker {
 
         void defineFunction(String name, String returnType) {
             functions.put(name, returnType);
+        }
+
+        /** 添加类型边界约束 */
+        void addTypeBound(String typeParam, String bound) {
+            typeBounds.put(typeParam, bound);
+        }
+
+        /** 获取类型边界 */
+        String getTypeBound(String typeParam) {
+            String bound = typeBounds.get(typeParam);
+            if (bound != null) return bound;
+            return parent != null ? parent.getTypeBound(typeParam) : null;
+        }
+
+        /** 检查类型是否满足边界约束 */
+        boolean satisfiesBound(String typeParam, String actualType) {
+            String bound = getTypeBound(typeParam);
+            if (bound == null) return true; // 无边界则通过
+
+            // 检查 actualType 是否实现了边界
+            if (bound.equals("Comparable")) {
+                return "Int".equals(actualType) || "Float".equals(actualType)
+                    || "String".equals(actualType) || "Any".equals(actualType);
+            }
+            if (bound.equals("Number")) {
+                return "Int".equals(actualType) || "Float".equals(actualType);
+            }
+
+            return true;
         }
 
         void defineType(String name) {

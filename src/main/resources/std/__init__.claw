@@ -1,0 +1,304 @@
+/**
+ * Claw 标准库 - 数据结构与算法
+ *
+ * 提供常用数据结构和算法的 Claw 定义
+ */
+
+module std.collection {
+    // ==================== 列表操作 ====================
+
+    /**
+     * 创建空列表
+     */
+    function empty<T>() -> List<T>
+
+    /**
+     * 创建指定大小的列表
+     */
+    function ofSize<T>(size: Int, value: T) -> List<T>
+
+    /**
+     * 列表长度
+     */
+    function length<T>(list: List<T>) -> Int
+
+    /**
+     * 列表是否为空
+     */
+    function isEmpty<T>(list: List<T>) -> Bool
+
+    /**
+     * 获取列表元素
+     */
+    function get<T>(list: List<T>, index: Int) -> T
+
+    /**
+     * 设置列表元素
+     */
+    function set<T>(list: List<T>, index: Int, value: T) -> Void
+
+    /**
+     * 添加元素到列表
+     */
+    function append<T>(list: List<T>, value: T) -> Void
+
+    /**
+     * 插入元素
+     */
+    function insert<T>(list: List<T>, index: Int, value: T) -> Void
+
+    /**
+     * 移除元素
+     */
+    function remove<T>(list: List<T>, index: Int) -> T
+
+    /**
+     * 清空列表
+     */
+    function clear<T>(list: List<T>) -> Void
+
+    /**
+     * 列表包含元素
+     */
+    function contains<T>(list: List<T>, value: T) -> Bool
+
+    /**
+     * 列表索引
+     */
+    function indexOf<T>(list: List<T>, value: T) -> Int
+
+    // ==================== 映射操作 ====================
+
+    /**
+     * 创建空映射
+     */
+    function empty<K, V>() -> Map<K, V>
+
+    /**
+     * 获取映射值
+     */
+    function get<K, V>(map: Map<K, V>, key: K) -> V
+
+    /**
+     * 设置映射值
+     */
+    function put<K, V>(map: Map<K, V>, key: K, value: V) -> Void
+
+    /**
+     * 映射包含键
+     */
+    function containsKey<K, V>(map: Map<K, V>, key: K) -> Bool
+
+    /**
+     * 映射包含值
+     */
+    function containsValue<K, V>(map: Map<K, V>, value: V) -> Bool
+
+    /**
+     * 移除映射项
+     */
+    function remove<K, V>(map: Map<K, V>, key: K) -> Void
+
+    /**
+     * 清空映射
+     */
+    function clear<K, V>(map: Map<K, V>) -> Void
+
+    /**
+     * 映射大小
+     */
+    function size<K, V>(map: Map<K, V>) -> Int
+
+    /**
+     * 映射键集合
+     */
+    function keys<K, V>(map: Map<K, V>) -> List<K>
+
+    /**
+     * 映射值集合
+     */
+    function values<K, V>(map: Map<K, V>) -> List<V>
+}
+
+module std.algorithm {
+    // ==================== 排序算法 ====================
+
+    /**
+     * 快速排序
+     */
+    function quickSort<T>(list: List<T>, compare: (T, T) -> Int) -> List<T>
+
+    /**
+     * 归并排序
+     */
+    function mergeSort<T>(list: List<T>, compare: (T, T) -> Int) -> List<T>
+
+    /**
+     * 冒泡排序
+     */
+    function bubbleSort<T>(list: List<T>, compare: (T, T) -> Int) -> List<T>
+
+    /**
+     * 二分查找
+     */
+    function binarySearch<T>(list: List<T>, value: T, compare: (T, T) -> Int) -> Int
+
+    // ==================== 查找算法 ====================
+
+    /**
+     * 线性查找
+     */
+    function linearSearch<T>(list: List<T>, value: T) -> Int
+
+    /**
+     * 查找最大值
+     */
+    function max<T>(list: List<T>, compare: (T, T) -> Int) -> T
+
+    /**
+     * 查找最小值
+     */
+    function min<T>(list: List<T>, compare: (T, T) -> Int) -> T
+
+    // ==================== 集合操作 ====================
+
+    /**
+     * 并集
+     */
+    function union<T>(a: List<T>, b: List<T>) -> List<T>
+
+    /**
+     * 交集
+     */
+    function intersection<T>(a: List<T>, b: List<T>) -> List<T>
+
+    /**
+     * 差集
+     */
+    function difference<T>(a: List<T>, b: List<T>) -> List<T>
+
+    /**
+     * 去重
+     */
+    function distinct<T>(list: List<T>) -> List<T>
+
+    // ==================== 转换操作 ====================
+
+    /**
+     * map - 变换每个元素
+     */
+    function map<T, R>(list: List<T>, transform: (T) -> R) -> List<R>
+
+    /**
+     * filter - 过滤元素
+     */
+    function filter<T>(list: List<T>, predicate: (T) -> Bool) -> List<T>
+
+    /**
+     * reduce - 聚合元素
+     */
+    function reduce<T, R>(list: List<T>, initial: R, accumulator: (R, T) -> R) -> R
+
+    /**
+     * flatMap - 展开变换
+     */
+    function flatMap<T, R>(list: List<T>, transform: (T) -> List<R>) -> List<R>
+}
+
+module std.option {
+    // ==================== 可选类型 ====================
+
+    /**
+     * 创建 Some
+     */
+    function some<T>(value: T) -> Optional<T>
+
+    /**
+     * 创建 None
+     */
+    function none<T>() -> Optional<T>
+
+    /**
+     * 可选是否有值
+     */
+    function isPresent<T>(opt: Optional<T>) -> Bool
+
+    /**
+     * 获取值或默认值
+     */
+    function orElse<T>(opt: Optional<T>, defaultValue: T) -> T
+
+    /**
+     * 获取值或 null
+     */
+    function orNull<T>(opt: Optional<T>) -> T
+
+    /**
+     * map - 变换可选值
+     */
+    function map<T, R>(opt: Optional<T>, transform: (T) -> R) -> Optional<R>
+
+    /**
+     * flatMap
+     */
+    function flatMap<T, R>(opt: Optional<T>, transform: (T) -> Optional<R>) -> Optional<R>
+
+    /**
+     * filter - 过滤可选值
+     */
+    function filter<T>(opt: Optional<T>, predicate: (T) -> Bool) -> Optional<T>
+}
+
+module std.result {
+    // ==================== 结果类型 ====================
+
+    /**
+     * 创建 Ok
+     */
+    function ok<T, E>(value: T) -> Result<T, E>
+
+    /**
+     * 创建 Err
+     */
+    function err<T, E>(error: E) -> Result<T, E>
+
+    /**
+     * 是否是 Ok
+     */
+    function isOk<T, E>(result: Result<T, E>) -> Bool
+
+    /**
+     * 是否是 Err
+     */
+    function isErr<T, E>(result: Result<T, E>) -> Bool
+
+    /**
+     * 获取 Ok 值
+     */
+    function unwrap<T, E>(result: Result<T, E>) -> T
+
+    /**
+     * 获取 Err 值
+     */
+    function unwrapErr<T, E>(result: Result<T, E>) -> E
+
+    /**
+     * 获取值或默认值
+     */
+    function unwrapOr<T, E>(result: Result<T, E>, defaultValue: T) -> T
+
+    /**
+     * map - 变换 Ok 值
+     */
+    function map<T, R, E>(result: Result<T, E>, transform: (T) -> R) -> Result<R, E>
+
+    /**
+     * mapErr - 变换 Err 值
+     */
+    function mapErr<T, E, F>(result: Result<T, E>, transform: (E) -> F) -> Result<T, F>
+
+    /**
+     * andThen - 链式操作
+     */
+    function andThen<T, R, E>(result: Result<T, E>, transform: (T) -> Result<R, E>) -> Result<R, E>
+}

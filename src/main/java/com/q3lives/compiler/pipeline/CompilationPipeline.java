@@ -8,15 +8,19 @@ import com.q3lives.compiler.core.*;
 import com.q3lives.compiler.decomposer.*;
 import com.q3lives.compiler.frontend.*;
 import com.q3lives.compiler.generators.*;
+import com.q3lives.compiler.generators.ffi.*;
+import com.q3lives.compiler.generators.ffi.platform.TargetTriple;
 import com.q3lives.compiler.hierarchy.*;
 import com.q3lives.compiler.integration.*;
 import com.q3lives.compiler.pairer.*;
 import com.q3lives.compiler.processors.semantic.*;
 import com.q3lives.compiler.scanner.*;
 import com.q3lives.compiler.security.PathValidator;
+import com.q3lives.ir.ClawIR;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -46,6 +50,10 @@ public class CompilationPipeline {
     private final DeclarationProcessor declarationProcessor = new DeclarationProcessor();
     private final LiteralProcessor literalProcessor = new LiteralProcessor();
     private final OperatorProcessor operatorProcessor = new OperatorProcessor();
+
+    // FFI 处理器
+    private final FFIBindingTable ffiBindingTable = new FFIBindingTable();
+    private final ExternProcessor externProcessor = new ExternProcessor(ffiBindingTable);
 
     // 注解系统
     private final AnnotationManager annotationManager = new AnnotationManager();
@@ -94,8 +102,30 @@ public class CompilationPipeline {
             HierarchicalBlocks hierarchicalBlocks = hierarchyBuilder.build(sourceView, pairingResult);
 
             // 1.5 实体分解
-            EntityDecomposer.DecompositionResult decomposition = 
+            EntityDecomposer.DecompositionResult decomposition =
                 entityDecomposer.decompose(hierarchicalBlocks);
+
+            // 1.6 FFI extern 块解析
+            log.info("[阶段1.6] FFI extern 块解析");
+            List<String> sourceLines = new ArrayList<>();
+            for (LineInfo lineInfo : sourceView.getLines()) {
+                sourceLines.add(lineInfo.getRawContent());
+            }
+            boolean externOk = externProcessor.process(sourceLines, fileName);
+            if (!externOk) {
+                externProcessor.reportDiagnostics();
+                List<String> externErrors = new ArrayList<>();
+                for (ExternProcessor.ProcessingError err : externProcessor.getErrors()) {
+                    externErrors.add(err.toString());
+                }
+                return CompilationResult.failure(fileName, "FFI extern 声明解析失败", externErrors,
+                    System.currentTimeMillis() - startTime);
+            }
+            if (!externProcessor.getWarnings().isEmpty()) {
+                for (ExternProcessor.ProcessingWarning warn : externProcessor.getWarnings()) {
+                    log.warn("FFI 警告: {}", warn);
+                }
+            }
 
             // ============ 阶段2：4层处理器处理（思想3）============
             log.info("[阶段2] 4层处理器处理");
@@ -148,12 +178,32 @@ public class CompilationPipeline {
             CodeGenerator codeGenerator = new CodeGenerator(memoryManager, propertyManager, flowManager);
             GeneratedCode generatedCode = codeGenerator.generate(ast, annotationManager, flowManager);
 
+            // 5.3 FFI 代码生成（如果存在 extern 声明）
+            ClawIR clawIR = new ClawIR(
+                new IRGenerator.IRProgram(fileName),
+                null, null, null
+            );
+            if (ffiBindingTable.hasExternDeclarations()) {
+                log.info("[阶段5.3] FFI 代码生成");
+                clawIR.setFfiBindingTable(ffiBindingTable);
+                // 目标平台默认使用当前主机
+                TargetTriple target = TargetTriple.detectHost();
+                FFICompilationPipeline ffiPipeline = new FFICompilationPipeline(target);
+                FFICompilationPipeline.FFIGenerationResult ffiResult = ffiPipeline.process(ffiBindingTable);
+                if (ffiResult.hasFFI) {
+                    log.info("FFI 链接库: {}", ffiResult.linkLibraries);
+                    log.info("FFI 链接标志: {}", ffiResult.linkFlags);
+                }
+            }
+
             long elapsed = System.currentTimeMillis() - startTime;
             log.info("====================================");
             log.info("编译完成: {} ({}ms)", fileName, elapsed);
             log.info("====================================");
 
-            return CompilationResult.success(generatedCode, elapsed);
+            CompilationResult result = CompilationResult.success(generatedCode, elapsed);
+            result.setIR(clawIR);
+            return result;
 
         } catch (CompilationException ex) {
             long elapsed = System.currentTimeMillis() - startTime;

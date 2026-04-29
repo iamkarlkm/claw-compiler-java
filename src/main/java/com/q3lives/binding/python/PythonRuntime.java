@@ -42,6 +42,10 @@ public class PythonRuntime implements TargetRuntime {
     @Override
     public String mapType(String clawType) {
         if (clawType == null) return "None";
+        // 泛型类型映射：Array<Int> -> list[int]
+        if (clawType.contains("<") && clawType.contains(">")) {
+            return mapGenericType(clawType);
+        }
         switch (clawType) {
             case "Int":    return "int";
             case "Float":  return "float";
@@ -51,6 +55,32 @@ public class PythonRuntime implements TargetRuntime {
             case "Any":    return "Any";
             default:       return clawType; // 自定义类型保留原名
         }
+    }
+
+    /** 映射泛型类型：Array<Int> -> list[int] */
+    private String mapGenericType(String clawType) {
+        int start = clawType.indexOf('<');
+        int end = clawType.lastIndexOf('>');
+        String baseType = clawType.substring(0, start);
+        String typeParams = clawType.substring(start + 1, end);
+
+        // 按基础类型映射
+        return switch (baseType) {
+            case "Array", "CArray" -> "list[" + mapType(typeParams) + "]";
+            case "List" -> "list[" + mapType(typeParams) + "]";
+            case "Map" -> {
+                // Map<K, V> -> dict[K, V]
+                String[] parts = typeParams.split(",");
+                if (parts.length == 2) {
+                    yield "dict[" + mapType(parts[0]) + ", " + mapType(parts[1]) + "]";
+                }
+                yield "dict[str, Any]";
+            }
+            case "Set" -> "set[" + mapType(typeParams) + "]";
+            case "Optional" -> mapType(typeParams) + " | None";
+            case "Result" -> "Any"; // Result 映射为 Any
+            default -> clawType; // 未知泛型保留原名
+        };
     }
 
     @Override

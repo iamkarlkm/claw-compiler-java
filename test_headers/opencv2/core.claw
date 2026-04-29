@@ -1,0 +1,134 @@
+/**
+ * opencv2 - 自动生成的 FFI 绑定
+ * 源文件: test_headers/opencv2/core.hpp
+ */
+
+module opencv2 {
+
+    extern "C" {
+      // link 和 include 在使用时添加
+      type opencv2Handle = OpaquePointer
+
+      const OPENCV_CORE_HPP: Int = 0
+      const CV_VERSION: String = "4.5.5"
+      const CV_VERSION_INT: Int = 4505
+      const CV_8UC1: Int = 0
+      const CV_8UC3: Int = 16
+      const CV_8UC4: Int = 24
+      const CV_32FC1: Int = 5
+      const CV_BGR2GRAY: Int = 6
+      const CV_BGR2RGB: Int = 4
+      const CV_BGR2HSV: Int = 54
+
+      struct Point {
+        x: Int
+        y: Int
+      }
+
+      struct Point2f {
+        x: Float
+        y: Float
+      }
+
+      struct Size {
+        width: Int
+        height: Int
+      }
+
+      struct Rect {
+        x: Int
+        y: Int
+        width: Int
+        height: Int
+      }
+
+      struct Scalar {
+        v0: Float
+        v1: Float
+        v2: Float
+        v3: Float
+      }
+
+      function imwrite(filename: Any, img: Mat) -> Void
+      function imshow(winname: Any, img: Mat) -> Void
+      function waitKey(0: Int) -> Void
+      function destroyAllWindows() -> Void
+      function line(img: Mat, pt1: Point, pt2: Point, color: Scalar, 1: Int) -> Void
+      function rectangle(img: Mat, rect: Rect, color: Scalar, 1: Int) -> Void
+      function circle(img: Mat, center: Point, radius: Int, color: Scalar, 1: Int) -> Void
+      function putText(img: Mat, text: Any, org: Point, fontFace: Int, fontScale: Float, color: Scalar) -> Void
+      function imread(filename: Any, 1: Int) -> Any
+      function cvtColor(src: Mat, code: Int) -> Any
+      function toGray(src: Mat) -> Any
+      function toHSV(src: Mat) -> Any
+      function blur(src: Mat, ksize: Size) -> Any
+      function GaussianBlur(src: Mat, ksize: Size, sigma: Float) -> Any
+      function Canny(image: Mat, threshold1: Float, threshold2: Float) -> Any
+      function threshold(src: Mat, thresh: Float, maxval: Float, type: Int) -> Any
+    }
+
+    function imwrite(filename: Any, img: Mat) -> Void {
+      return ext.imwrite(filename, img)
+    }
+
+    function imshow(winname: Any, img: Mat) -> Void {
+      return ext.imshow(winname, img)
+    }
+
+    function waitKey(0: Int) -> Void {
+      return ext.waitKey(0)
+    }
+
+    function destroyAllWindows() -> Void {
+      return ext.destroyAllWindows()
+    }
+
+    function line(img: Mat, pt1: Point, pt2: Point, color: Scalar, 1: Int) -> Void {
+      return ext.line(img, pt1, pt2, color, 1)
+    }
+
+    function rectangle(img: Mat, rect: Rect, color: Scalar, 1: Int) -> Void {
+      return ext.rectangle(img, rect, color, 1)
+    }
+
+    function circle(img: Mat, center: Point, radius: Int, color: Scalar, 1: Int) -> Void {
+      return ext.circle(img, center, radius, color, 1)
+    }
+
+    function putText(img: Mat, text: Any, org: Point, fontFace: Int, fontScale: Float, color: Scalar) -> Void {
+      return ext.putText(img, text, org, fontFace, fontScale, color)
+    }
+
+    function imread(filename: Any, 1: Int) -> Any {
+      return ext.imread(filename, 1)
+    }
+
+    function cvtColor(src: Mat, code: Int) -> Any {
+      return ext.cvtColor(src, code)
+    }
+
+    function toGray(src: Mat) -> Any {
+      return ext.toGray(src)
+    }
+
+    function toHSV(src: Mat) -> Any {
+      return ext.toHSV(src)
+    }
+
+    function blur(src: Mat, ksize: Size) -> Any {
+      return ext.blur(src, ksize)
+    }
+
+    function GaussianBlur(src: Mat, ksize: Size, sigma: Float) -> Any {
+      return ext.GaussianBlur(src, ksize, sigma)
+    }
+
+    function Canny(image: Mat, threshold1: Float, threshold2: Float) -> Any {
+      return ext.Canny(image, threshold1, threshold2)
+    }
+
+    function threshold(src: Mat, thresh: Float, maxval: Float, type: Int) -> Any {
+      return ext.threshold(src, thresh, maxval, type)
+    }
+
+}
